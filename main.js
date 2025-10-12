@@ -1,311 +1,292 @@
-/* jshint -W097 */// jshint strict:false
+/* jshint -W097 */ 
 /* jslint node: true */
 "use strict";
 
-var xml2js = require('xml2js');
-var utils = require(__dirname + '/lib/utils'); // Get common adapter utils
+const xml2js = require("xml2js");
+const utils = require(__dirname + "/lib/utils");
+const request = require("request");
 
-var request = require('request');
+const adapter = utils.adapter("mobile-alerts");
 
-// Set the headers
-var headers = {
-    'User-Agent':       'User Agent/0.0.1',
-    'Content-Type':     'application/x-www-form-urlencoded'
-}
+let timer = null;
 
-// you have to call the adapter function and pass a options object
-// name has to be set and has to be equal to adapters folder name and main file
-// name excluding extension
-// adapter will be restarted automatically every time as the configuration
-// changed, e.g system.adapter.mobile-alerts.0
-var adapter = utils.adapter('mobile-alerts');
-
-// is called when adapter shuts down - callback has to be called under any
-// circumstances!
-adapter.on('unload', function(callback) {
-	try {
-		adapter.log.debug('cleaned everything up...');
-		callback();
-	} catch (e) {
-		callback();
-	}
+adapter.on("unload", (callback) => {
+    try {
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
+        adapter.log.debug("cleaned everything up...");
+        callback();
+    } catch (e) {
+        callback();
+    }
 });
 
-// is called if a subscribed object changes
-adapter.on('objectChange', function(id, obj) {
-	// Warning, obj can be null if it was deleted
-	adapter.log.debug('objectChange ' + id + ' ' + JSON.stringify(obj));
+adapter.on("objectChange", (id, obj) => {
+    adapter.log.debug(`objectChange ${id} ${JSON.stringify(obj)}`);
 });
 
-// is called if a subscribed state changes
-adapter.on('stateChange', function(id, state) {
-	// Warning, state can be null if it was deleted
-	
-	adapter.log.debug('stateChange ' + id + ' ' + JSON.stringify(state));
-
-	// you can use the ack flag to detect if it is status (true) or command
-	// (false)
-	if (state && !state.ack) {
-		adapter.log.debug('ack is not set!');
-	}
+adapter.on("stateChange", (id, state) => {
+    adapter.log.debug(`stateChange ${id} ${JSON.stringify(state)}`);
+    if (state && !state.ack) {
+        adapter.log.debug("ack is not set!");
+    }
 });
 
-// Some message was sent to adapter instance over message box. Used by email,
-// pushover, text2speech, ...
-adapter.on('message', function(obj) {
-	if (typeof obj == 'object' && obj.message) {
-		if (obj.command == 'send') {
-			// e.g. send email or pushover or whatever
-			console.log('send command');
-
-			// Send response in callback if required
-			if (obj.callback)
-				adapter.sendTo(obj.from, obj.command, 'Message received', obj.callback);
-		}
-	}
+adapter.on("message", (obj) => {
+    if (typeof obj === "object" && obj.message) {
+        if (obj.command === "send") {
+            adapter.log.info("send command received");
+            if (obj.callback) {
+                adapter.sendTo(obj.from, obj.command, "Message received", obj.callback);
+            }
+        }
+    }
 });
 
-// is called when databases are connected and adapter received configuration.
-// start here!
-adapter.on('ready', function() {
-	main();
+adapter.on("ready", () => {
+    main();
 });
 
 function main() {
-	var methodName = "main";
-	adapter.log.debug("in:  " + methodName + " v0.5.1");
+    adapter.log.info("Adapter ready, starte Datenabruf");
 
-	// All states changes inside the adapter's namespace are subscribed
-	adapter.subscribeStates('*');
+    // Intervall aus Konfiguration (in Minuten)
+    const intervalMin = adapter.config.intervalMin || 14;
+    const intervalMs = intervalMin * 60 * 1000;
 
-	var ma_hostname = adapter.config.hostname;
-	var ma_phoneId = adapter.config.phoneId;
-	var ma_path = adapter.config.path;
-	var ma_extractNumbers = adapter.config.extractNumbers;
-	
-	// Configure the request
-	var options = {
-    	url: 'https://' + ma_hostname + ma_path,
-	    method: 'POST',
-    	headers: headers,
-	    form: {'phoneid': ma_phoneId}
-	}
+    // Direkt starten
+    fetchAndProcess();
 
-	request(options, function (error, response, body) {
-	  	if (error || response.statusCode != 200) {
-	  		if (error !== null) { adapter.log.error('error: ' + error); }
-	  		adapter.log.error('response.statusCode: ' + response.statusCode);
-  			adapter.log.debug('body: ' + body);
-  			adapter.log.error('Exit: No valid response from Mobile Alerts server');
-			setTimeout(function() {
-				process.exit(-2);
-			}, 2000);
-  		} else {
-			adapter.log.debug('Data received from Mobile Alerts server');
-			var data = body.toString().match(/(<h[45]>.*<\/h[45]>|<\/?body>|<a .*deviceid=.*<\/a>)/gim);
-			
-			if (!data || !data.toString()) {
-				setTimeout(function() {
-  					adapter.log.error('Exit: Data not matched');
-  					adapter.log.debug('body: ' + body);
-					process.exit(-3);
-				}, 2000);
-			} else {
-				parseData(data.toString());
-			}
-		}
-	});
-
-	// Force terminate
-	setTimeout(function() {
-		adapter.log.error('Exit: Timeout. Termination forced!');
-		process.exit(-1);
-	}, 4 * 60000);
-
-	adapter.log.debug("out: " + methodName);
+    // Intervall starten
+    timer = setInterval(fetchAndProcess, intervalMs);
 }
 
-function parseData(xml) {
-	var methodName = "parseData";
-	adapter.log.debug("in:  " + methodName);
-	adapter.log.debug("parameter: xml: " + xml);
+function fetchAndProcess() {
+    const ma_hostname = adapter.config.hostname;
+    const ma_phoneId = adapter.config.phoneId;
+    const ma_path = adapter.config.path || "/Home/SensorsOverview";
 
-	var options = {
-	  explicitArray : false,
-	  mergeAttrs : true
-	};
+    if (!ma_hostname || !ma_phoneId) {
+        adapter.log.error("Hostname oder phoneId nicht konfiguriert");
+        return;
+    }
 
-	var parser = new xml2js.Parser(options);
-	parser.parseString(xml, function(err, result) {
+    const url = `https://${ma_hostname}${ma_path}`;
 
-		if (err || result == undefined || (result.a == undefined || result.h4 == undefined || result.h5 == undefined)) {
-			var msg;
-			if (err) {
-				msg = err;
-			} else {
-				adapter.log.debug("result: " + JSON.stringify(result));
-				msg = "Matching HTML tags not found";
-			}
-			adapter.log.error("parseString error: " + msg);
+    const headers = {
+        "User-Agent": "Mozilla/5.0 (ioBroker mobile-alerts)",
+        "Content-Type": "application/x-www-form-urlencoded",
+    };
 
-		} else {
+    const options = {
+        url: url,
+        method: "POST",
+        headers: headers,
+        form: { phoneid: ma_phoneId },
+        timeout: 15000,
+    };
 
-			adapter.log.debug("result: " + JSON.stringify(result));
+    adapter.log.debug(`Rufe URL auf: ${url} mit phoneId=${ma_phoneId}`);
 
-			setDevices(result);
-			setObjects(result);
-			setStates(result);
-		}
+    request(options, (error, response, body) => {
+        if (error) {
+            adapter.log.error(`HTTP-Request Fehler: ${error}`);
+            return;
+        }
+        if (!response || response.statusCode !== 200) {
+            adapter.log.error(`Ungültiger HTTP-Status: ${response?.statusCode}`);
+            adapter.log.debug(`Body: ${body}`);
+            return;
+        }
 
-	});
-
-	setTimeout(function() {
-		process.exit(0);
-	}, 10000);
-
-	adapter.log.debug("out: " + methodName);
-
+        adapter.log.debug("Daten erhalten vom Server, beginne Parsen");
+        parseHtml(body);
+    });
 }
 
-function setDevices(result) {
-	var methodName = "setDevices";
-	adapter.log.debug("in:  " + methodName);
+function parseHtml(html) {
+    // Wir versuchen, nur die interessanten Tags herauszufiltern
+    const matches = html.match(/(<h[45]>.*?<\/h[45]>|<a .*?deviceid=.*?<\/a>)/gim);
+    if (!matches) {
+        adapter.log.error("Keine gültigen Daten im HTML gefunden");
+        adapter.log.debug(`HTML Inhalt: ${html}`);
+        return;
+    }
 
-	var i = 0;
-	var deviceId = "";
+    const xmlFragment = matches.join("");
+    adapter.log.debug(`XML-Fragment: ${xmlFragment}`);
 
-	while (result.a[i] != undefined) {
+    const parser = new xml2js.Parser({
+        explicitArray: false,
+        mergeAttrs: true,
+    });
 
-		var deviceName = result.a[i]["#"].trim();
-		var href = result.a[i]["href"];
-		var deviceId = getHrefParamValue(href, "deviceid");
+    parser.parseString(xmlFragment, (err, result) => {
+        if (err) {
+            adapter.log.error("Fehler beim Parsen: " + err);
+            return;
+        }
+        if (!result || (!result.a && (!result.h4 || !result.h5))) {
+            adapter.log.error("Erwartete Tags nicht gefunden im Parsergebnis");
+            adapter.log.debug("Parsergebnis: " + JSON.stringify(result));
+            return;
+        }
 
-		adapter.log.debug(deviceName + ": " + deviceId);
-
-		adapter.setObjectNotExists(deviceId, {
-		  type : 'device',
-		  common : {
-		    name : deviceName,
-		    type : 'string',
-		    role : 'sensor',
-		    ack : true
-		  },
-		  native : {}
-		});
-		
-		i++;
-	}
-
-	adapter.log.debug("out: " + methodName);
+        try {
+            handleParsed(result);
+        } catch (e) {
+            adapter.log.error("Fehler in handleParsed: " + e);
+        }
+    });
 }
 
-function setObjects(result) {
-	var methodName = "setObjects";
-	adapter.log.debug("in:  " + methodName);
+async function handleParsed(result) {
+    // Ergebnis kann eine Struktur mit result.a (Array oder Einzelobjekt) sein
+    let arrA = [];
+    if (Array.isArray(result.a)) {
+        arrA = result.a;
+    } else if (result.a) {
+        arrA = [result.a];
+    }
 
-	var i = 0;
-	var deviceId = "";
+    // h4 und h5 entsprechend behandeln
+    let arrH4 = [];
+    if (Array.isArray(result.h4)) {
+        arrH4 = result.h4;
+    } else if (result.h4) {
+        arrH4 = [result.h4];
+    }
 
-	while ((result.a[i] != undefined || result.h4[i] != undefined || result.h5[i] != undefined)) {
+    let arrH5 = [];
+    if (Array.isArray(result.h5)) {
+        arrH5 = result.h5;
+    } else if (result.h5) {
+        arrH5 = [result.h5];
+    }
 
-		if (result.h4[i] != undefined && result.h4[i] != undefined) {
-			var key = result.h5[i];
-			var value = result.h4[i];
+    // Zuerst: Geräte (Device-Objekte)
+    for (let i = 0; i < arrA.length; i++) {
+        const aObj = arrA[i];
+        if (!aObj["#"] || !aObj.href) continue;
+        const deviceName = aObj["#"].trim();
+        const href = aObj.href;
+        const deviceId = getHrefParamValue(href, "deviceid");
+        if (!deviceId) continue;
 
-			if (key == "ID") {
-				deviceId = value;
+        await adapter.setObjectNotExistsAsync(deviceId, {
+            type: "device",
+            common: {
+                name: deviceName,
+                type: "string",
+                role: "sensor",
+                read: true,
+                write: false,
+            },
+            native: {},
+        });
+    }
 
-			} else {
-				var normalizedKey = normalize(key);
-				adapter.setObjectNotExists(deviceId + "." + normalizedKey, {
-				  type : 'state',
-				  common : {
-				    name : key,
-				    type : 'string',
-				    role : 'data',
-				    ack : true
-				  },
-				  native : {}
-				});
+    // Objekte (States) anlegen
+    for (let i = 0; i < arrH4.length && i < arrH5.length; i++) {
+        const key = arrH5[i];
+        const value = arrH4[i];
+        if (!key || !value) continue;
 
-			}
+        if (key === "ID") {
+            // ist Kennung des Geräts, wird als deviceId genutzt
+            // nichts tun hier
+        } else {
+            const normalizedKey = normalize(key);
+            // Für jedes Gerät: Wir legen ein State unter deviceId.normalizedKey an
+            // Aber: Wir brauchen das passende deviceId für diese Position i
+            // Dafür: wir suchen aus arrH4/H5 oder arrA, welcher deviceId zu diesem Index gehört
+            // Eine einfache Heuristik: wenn arrA[i] existiert und hat href, nutze diesen deviceId
+            let deviceId = null;
+            if (arrA[i] && arrA[i].href) {
+                deviceId = getHrefParamValue(arrA[i].href, "deviceid");
+            }
+            if (!deviceId) {
+                // fallback: falls kein passendes a-Objekt in diesem Index, überspringen
+                continue;
+            }
 
-		}
+            await adapter.setObjectNotExistsAsync(deviceId + "." + normalizedKey, {
+                type: "state",
+                common: {
+                    name: key,
+                    type: "string",
+                    role: "value",
+                    read: true,
+                    write: false,
+                },
+                native: {},
+            });
+        }
+    }
 
-		i++;
-	}
+    // States setzen
+    for (let i = 0; i < arrH4.length && i < arrH5.length; i++) {
+        const key = arrH5[i];
+        const value = arrH4[i];
+        if (!key || !value) continue;
 
-	adapter.log.debug("out: " + methodName);
+        if (key === "ID") {
+            continue;
+        } else {
+            const normalizedKey = normalize(key);
+            let deviceId = null;
+            if (arrA[i] && arrA[i].href) {
+                deviceId = getHrefParamValue(arrA[i].href, "deviceid");
+            }
+            if (!deviceId) {
+                continue;
+            }
+
+            const formatted = formatNum(value);
+            await adapter.setStateAsync(deviceId + "." + normalizedKey, {
+                val: formatted,
+                ack: true,
+            });
+        }
+    }
+
+    adapter.log.info("Daten verarbeitet und States gesetzt");
 }
-
-function setStates(result) {
-	var methodName = "setStates";
-	adapter.log.debug("in:  " + methodName);
-
-	var i = 0;
-	var deviceId = "";
-
-	while ((result.a[i] != undefined || result.h4[i] != undefined || result.h4[i] != undefined)) {
-
-		if (result.h4[i] != undefined && result.h4[i] != undefined) {
-			var key = result.h5[i];
-			var value = result.h4[i];
-
-			if (key == "ID") {
-				deviceId = value;
-			} else {
-				adapter.setState(deviceId + "." + normalize(key), {
-				  val : formatNum(value),
-				  ack : true
-				});
-			}
-		}
-
-		i++;
-	}
-
-	adapter.log.debug("out: " + methodName);
-}
-
-// Utils
 
 function formatNum(s) {
-
-	if (extractNumbers == undefined) {
-		var extractNumbers = adapter.config.extractNumbers;
-		if (extractNumbers && patternNumber == undefined) {
-			var patternNumber = /^(-|\+)?\d+(,|\.)?\d* *(C|F|%|mm|km\/h|hPa|m\/s)$/;
-		}
-	}
-
-	if (extractNumbers && patternNumber.test(s)) {
-		s = s.replace(",", ".");
-		s = parseFloat(s).toString();
-	}
-	return s;
+    let extractNumbers = adapter.config.extractNumbers;
+    if (extractNumbers) {
+        const patternNumber = /^(-|\+)?\d+(,|\.)?\d* *(C|F|%|mm|km\/h|hPa|m\/s)$/;
+        if (patternNumber.test(s)) {
+            s = s.replace(",", ".");
+            return parseFloat(s);
+        }
+    }
+    return s;
 }
 
 function normalize(s) {
-	s = s.toLowerCase();
-	s = s.replace(" ", "_");
-	s = s.replace("ä", "ue");
-	s = s.replace("ö", "oe");
-	s = s.replace("ü", "ue");
-	s = s.replace("ß", "ss");
-	return s;
+    let str = s.toLowerCase();
+    str = str.replace(/ /g, "_");
+    str = str.replace(/ä/g, "ae");
+    str = str.replace(/ö/g, "oe");
+    str = str.replace(/ü/g, "ue");
+    str = str.replace(/ß/g, "ss");
+    return str;
 }
 
 function getHrefParamValue(href, paramName) {
-	var paramValue;
-	var params = href.split("?")[1];
-
-	params = params.split("&");
-	for (var i = 0; i < params.length; i++) {
-		var param = params[i].split("="); // ['this','true'], ...
-		if (param[0] == paramName) {
-			paramValue = param[1];
-			break;
-		}
-	}
-	return paramValue;
+    const parts = href.split("?");
+    if (parts.length < 2) return null;
+    const query = parts[1];
+    const params = query.split("&");
+    for (const p of params) {
+        const kv = p.split("=");
+        if (kv[0] === paramName) {
+            return kv[1];
+        }
+    }
+    return null;
 }
