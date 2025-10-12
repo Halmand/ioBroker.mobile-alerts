@@ -10,7 +10,7 @@
     "platform": "Javascript/Node.js",
     "main": "main.js",
     "mode": "schedule",
-    "schedule": "*/7 * * * *",
+    "schedule": "*/12 * * * *",
     "enabled": true,
     "license": "MIT",
     "loglevel": "info",
