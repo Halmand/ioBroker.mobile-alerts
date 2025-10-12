@@ -1,62 +1,19 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="utf-8">
-    <title>Mobile Alerts Adapter</title>
-</head>
 <body>
-    <div class="adapter-body">
-        <h3>Adapter-Einstellungen</h3>
-        <table>
-            <tr>
-                <td><label for="hostname">Hostname</label></td>
-                <td><input id="hostname" type="text" /></td>
-            </tr>
-            <tr>
-                <td><label for="path">Pfad</label></td>
-                <td><input id="path" type="text" /></td>
-            </tr>
-            <tr>
-                <td><label for="phoneId">Phone-ID</label></td>
-                <td><input id="phoneId" type="text" /></td>
-            </tr>
-            <tr>
-                <td><label for="intervalMin">Intervall (Minuten)</label></td>
-                <td><input id="intervalMin" type="number" min="1" /></td>
-            </tr>
-            <tr>
-                <td><label for="extractNumbers">Zahlen extrahieren</label></td>
-                <td><input id="extractNumbers" type="checkbox" /></td>
-            </tr>
-        </table>
-    </div>
+    <label>Phone ID: <input id="phoneId" type="text"></label>
 
-    <script type="text/javascript">
-        if (typeof systemConfig !== 'undefined' && systemConfig.language) {
-            systemLang = systemConfig.language;
-        }
-
+    <script>
         function load(settings, onChange) {
-            if (!settings) return;
-
-            $('#hostname').val(settings.hostname).on('change', () => onChange());
-            $('#path').val(settings.path).on('change', () => onChange());
-            $('#phoneId').val(settings.phoneId).on('change', () => onChange());
-            $('#intervalMin').val(settings.intervalMin).on('change', () => onChange());
-            $('#extractNumbers').prop('checked', settings.extractNumbers).on('change', () => onChange());
-
+            $('#phoneId').val(settings.phoneId || '').on('change', () => onChange());
             onChange(false);
         }
-
         function save(callback) {
-            callback({
-                hostname: $('#hostname').val(),
-                path: $('#path').val(),
-                phoneId: $('#phoneId').val(),
-                intervalMin: parseInt($('#intervalMin').val(), 10) || 14,
-                extractNumbers: $('#extractNumbers').prop('checked')
-            });
+            callback({ phoneId: $('#phoneId').val() });
         }
     </script>
+
+    <!-- jQuery einbinden, da ioBroker es erwartet -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 </body>
 </html>
