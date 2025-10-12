@@ -1,128 +1,62 @@
+<!DOCTYPE html>
 <html>
+<head>
+    <meta charset="utf-8">
+    <title>Mobile Alerts Adapter</title>
+</head>
+<body>
+    <div class="adapter-body">
+        <h3>Adapter-Einstellungen</h3>
+        <table>
+            <tr>
+                <td><label for="hostname">Hostname</label></td>
+                <td><input id="hostname" type="text" /></td>
+            </tr>
+            <tr>
+                <td><label for="path">Pfad</label></td>
+                <td><input id="path" type="text" /></td>
+            </tr>
+            <tr>
+                <td><label for="phoneId">Phone-ID</label></td>
+                <td><input id="phoneId" type="text" /></td>
+            </tr>
+            <tr>
+                <td><label for="intervalMin">Intervall (Minuten)</label></td>
+                <td><input id="intervalMin" type="number" min="1" /></td>
+            </tr>
+            <tr>
+                <td><label for="extractNumbers">Zahlen extrahieren</label></td>
+                <td><input id="extractNumbers" type="checkbox" /></td>
+            </tr>
+        </table>
+    </div>
 
-<!-- these 4 files always have to be included -->
-<link rel="stylesheet" type="text/css" href="../../lib/css/themes/jquery-ui/redmond/jquery-ui.min.css" />
-<script type="text/javascript" src="../../lib/js/jquery-1.11.1.min.js"></script>
-<script type="text/javascript" src="../../socket.io/socket.io.js"></script>
-<script type="text/javascript" src="../../lib/js/jquery-ui-1.10.3.full.min.js"></script>
+    <script type="text/javascript">
+        if (typeof systemConfig !== 'undefined' && systemConfig.language) {
+            systemLang = systemConfig.language;
+        }
 
+        function load(settings, onChange) {
+            if (!settings) return;
 
-<!-- optional: use jqGrid
-<link rel="stylesheet" type="text/css" href="../../lib/css/jqGrid/ui.jqgrid-4.5.4.css"/>
-<script type="text/javascript" src="../../lib/js/jqGrid/jquery.jqGrid-4.5.4.min.js"></script>
-<script type="text/javascript" src="../../lib/js/jqGrid/i18n/grid.locale-all.js"></script>
--->
+            $('#hostname').val(settings.hostname).on('change', () => onChange());
+            $('#path').val(settings.path).on('change', () => onChange());
+            $('#phoneId').val(settings.phoneId).on('change', () => onChange());
+            $('#intervalMin').val(settings.intervalMin).on('change', () => onChange());
+            $('#extractNumbers').prop('checked', settings.extractNumbers).on('change', () => onChange());
 
-<!-- optional: use multiselect
-<link rel="stylesheet" type="text/css" href="../../lib/css/jquery.multiselect-1.13.css"/>
-<script type="text/javascript" src="../../lib/js/jquery.multiselect-1.13.min.js"></script>
--->
+            onChange(false);
+        }
 
-<!-- these two file always have to be included -->
-<link rel="stylesheet" type="text/css" href="../../css/adapter.css" />
-<script type="text/javascript" src="../../js/translate.js"></script>
-<script type="text/javascript" src="../../js/adapter-settings.js"></script>
-
-
-<!-- you have to define 2 functions in the global scope: -->
-<script type="text/javascript">
-	// Dictionary (systemDictionary is global variable from adapter-settings.js)
-  systemDictionary = {
-    "Mobile Alerts adapter settings" : {
-      "de" : "Einstellungen für den Mobile-Alerts-Adapter "
-    },
-    "On save adapter restarts with new config immediately" : {
-      "de" : "Beim Speichern der Einstellungen wird der Adapter neu gestartet."
-    },
-    "When selected the pure number is saved (useful if you want to do some further calculations)" : {
-      "de" : "Falls ausgewählt, wird der reine Zahlenwert gespeichert (nützlich wenn weitere Berechnungen erfolgen sollen)."
-    },
-    "Only for temperatures in degree C and degree F, percent values (%), lengths in mm and velocities in km/h" : {
-      "de" : "Nur für Temperaturen in °C and °F, Prozentwerte (%), Längen in mm and Geschwindigkeiten in km/h"
-    },
-    "Extract numbers" : { "de" : "Zahlen extrahieren"}
-  };
-
-  // the function loadSettings has to exist ...
-  function load(settings, onChange) {
-    console.log("***** load");
-	  $('#phoneId').val(settings.phoneId).change(function() {
-      changed = true;
-      $('#save').button("enable");
-    }).keyup(onChange);
-    
-	  $('#hostname').val(settings.hostname).change(function() {
-      changed = true;
-      $('#save').button("enable");  
-    }).keyup(onChange);
-    
-	  $('#path').val(settings.path).change(function() {
-      changed = true;
-      $('#save').button("enable");
-    }).keyup(onChange);
-    
-	  $('#extractNumbers').prop('checked', settings.extractNumbers).change(function() {
-      changed = true;
-      $('#save').button("enable");
-    });
-    
-    onChange(false);
-  }
-
-  // ... and the function save has to exist.
-  // you have to make sure the callback is called with the settings object as first param!
-  function save(callback) {
-    console.log("***** save");
-	  callback({
-	    phoneId : $('#phoneId').val(),
-	    hostname : $('#hostname').val(),
-	    path : $('#path').val(),
-	    extractNumbers : $('#extractNumbers').prop('checked')
-	  });
-  }
-</script>
-
-<!-- you have to put your config page in a div with id adapter-container -->
-<div id="adapter-container">
-
-  <table>
-    <tr>
-      <td><img src="mobile-alerts.png" /></td>
-      <td><h3 class="translate">Mobile Alerts adapter settings</h3></td>
-    </tr>
-  </table>
-
-  <table style="padding-left: 24px">
-    <tr>
-      <td><label for="phoneId" class="translate">PhoneId</label></td>
-      <td><input class="value" type="text" id="phoneId" size="20" /></td>
-    </tr>
-
-    <tr>
-      <td><label for="hostname" class="translate">Hostname</label></td>
-      <td><input class="value" type="text" id="hostname" size="60" /></td>
-    </tr>
-
-    <tr>
-      <td><label for="path" class="translate">Path</label></td>
-      <td><input class="value" type="text" id="path" size="60" /></td>
-    </tr>
-
-    <tr>
-      <td valign="top"><label for="extractNumbers" class="translate">Zahlen extrahieren</label></td>
-      <td><input class="value" type="checkbox" id="extractNumbers" /><br/>
-      <span class="translate">When selected the pure number is saved (useful if you want to do some further calculations)</span><br/>
-      <span class="translate">Only for temperatures in degree C and degree F, percent values (%), lengths in mm and velocities in km/h</span>
-  	  </td>
-    </tr>
-    
-    <tr>
-      <td colspan=2><p class="translate">On save adapter restarts with new config immediately</p></td>
-    </tr>    
-
-  </table>
-  <br/><br/>
-  
-</div>
-
+        function save(callback) {
+            callback({
+                hostname: $('#hostname').val(),
+                path: $('#path').val(),
+                phoneId: $('#phoneId').val(),
+                intervalMin: parseInt($('#intervalMin').val(), 10) || 14,
+                extractNumbers: $('#extractNumbers').prop('checked')
+            });
+        }
+    </script>
+</body>
 </html>
