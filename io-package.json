@@ -1,6 +1,6 @@
 {
   "common": {
-    "name": "mobilealerts",
+    "name": "iobroker.mobile-alerts",
     "version": "1.0.0",
     "title": "Mobile Alerts",
     "desc": "Reads temperature, humidity, battery and timestamp data from measurements.mobile-alerts.eu",
