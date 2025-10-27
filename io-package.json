@@ -1,0 +1,21 @@
+{
+  "common": {
+    "name": "mobilealerts",
+    "version": "1.0.0",
+    "title": "Mobile Alerts",
+    "desc": "Reads temperature, humidity, battery and timestamp data from measurements.mobile-alerts.eu",
+    "authors": ["Dein Name"],
+    "platform": "Javascript/Node.js",
+    "mode": "daemon",
+    "icon": "mobilealerts.png",
+    "compact": true,
+    "enabled": true,
+    "materialize": true,
+    "dataSource": "poll",
+    "type": "sensor"
+  },
+  "native": {
+    "phoneId": "035886772208",
+    "pollInterval": 300
+  }
+}

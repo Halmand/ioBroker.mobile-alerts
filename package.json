@@ -1,0 +1,17 @@
+{
+  "name": "iobroker.mobilealerts",
+  "version": "1.0.0",
+  "description": "Adapter zum Auslesen von Temperatur-, Feuchtigkeits-, Batteriestatus- und Zeitdaten von Mobile Alerts",
+  "author": "Dein Name",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "cheerio": "^1.0.0-rc.12",
+    "@iobroker/adapter-core": "^3.1.0"
+  },
+  "keywords": ["ioBroker", "mobile alerts", "temperature", "humidity", "battery"]
+}
