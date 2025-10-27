@@ -5,7 +5,7 @@ const cheerio = require('cheerio');
 
 class MobileAlerts extends utils.Adapter {
     constructor(options = {}) {
-        super({ ...options, name: 'mobilealerts' });
+        super({ ...options, name: 'mobile-alerts' });
         this.pollTimer = null;
         this.phoneId = '';
         this.pollInterval = 300000;
