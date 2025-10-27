@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mobile Alerts Adapter</title>
+<link rel="stylesheet" type="text/css" href="../../lib/css/materialize.css">
+<script type="text/javascript" src="../../lib/js/jquery-3.3.1.min.js"></script>
+<script type="text/javascript" src="../../lib/js/materialize.js"></script>
+<style>.adapter-body{padding:20px;}</style>
+</head>
+<body>
+<div class="adapter-body">
+  <h5>Mobile Alerts Einstellungen</h5>
+  <div class="input-field">
+    <input id="phoneId" type="text" class="value" />
+    <label for="phoneId">Phone ID</label>
+  </div>
+  <div class="input-field">
+    <input id="pollInterval" type="number" class="value" />
+    <label for="pollInterval">Abfrageintervall (Sekunden)</label>
+  </div>
+</div>
+<script>
+function load(settings,onChange){if(!settings)return;$('.value').each(function(){const id=$(this).attr('id');if(settings[id]!==undefined){$(this).val(settings[id]).on('change',()=>onChange()).trigger('change');}});M.updateTextFields();onChange(false);}
+function save(callback){const obj={};$('.value').each(function(){obj[$(this).attr('id')]=$(this).val();});callback(obj);}
+</script>
+</body>
+</html>
