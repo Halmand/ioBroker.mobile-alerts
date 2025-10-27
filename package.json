@@ -2,7 +2,7 @@
   "name": "iobroker.mobile-alerts",
   "version": "1.0.2",
   "description": "Adapter zum Auslesen von Temperatur-, Feuchtigkeits-, Batteriestatus- und Zeitdaten von Mobile Alerts",
-  "author": "Dein Name",
+  "author": "Halmand GPT5",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
