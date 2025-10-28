@@ -2,50 +2,61 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Mobile Alerts Adapter</title>
+  <title>Mobile Alerts Adapter Einstellungen</title>
 
-  <!-- ioBroker Core JS -->
+  <!-- iobroker standard libs -->
   <script type="text/javascript" src="../../lib/js/jquery-3.3.1.min.js"></script>
   <script type="text/javascript" src="../../lib/js/materialize.js"></script>
   <script type="text/javascript" src="../../js/adapter-settings.js"></script>
-
   <link rel="stylesheet" type="text/css" href="../../lib/css/materialize.css">
+
   <style>
-    .adapter-body { padding: 20px; }
+    .adapter-body {
+      padding: 20px;
+    }
   </style>
 </head>
+
 <body>
   <div class="adapter-body">
-    <h5>Mobile Alerts Einstellungen</h5>
+    <h5 data-translate="Mobile Alerts Einstellungen">Mobile Alerts Einstellungen</h5>
 
-    <div class="input-field">
+    <div class="input-field col s6">
       <input id="phoneId" type="text" class="value" />
-      <label for="phoneId">Phone ID</label>
+      <label for="phoneId" class="translate">Phone ID</label>
     </div>
 
-    <div class="input-field">
+    <div class="input-field col s6">
       <input id="pollInterval" type="number" class="value" />
-      <label for="pollInterval">Abfrageintervall (Sekunden)</label>
+      <label for="pollInterval" class="translate">Abfrageintervall (Sekunden)</label>
     </div>
   </div>
 
   <script type="text/javascript">
+    // Wird von ioBroker aufgerufen
     function load(settings, onChange) {
       if (!settings) return;
-      $('.value').each(function () {
-        const id = $(this).attr('id');
+
+      $(".value").each(function () {
+        const id = $(this).attr("id");
         if (settings[id] !== undefined) {
-          $(this).val(settings[id]).on('change', () => onChange()).trigger('change');
+          $(this)
+            .val(settings[id])
+            .on("change input", () => onChange())
+            .trigger("change");
         }
       });
-      M.updateTextFields();
+
+      // Textfelder aktualisieren (Materialize)
+      if (M && M.updateTextFields) M.updateTextFields();
       onChange(false);
     }
 
+    // Wird beim Klick auf „Speichern“ ausgelöst
     function save(callback) {
       const obj = {};
-      $('.value').each(function () {
-        obj[$(this).attr('id')] = $(this).val();
+      $(".value").each(function () {
+        obj[$(this).attr("id")] = $(this).val();
       });
       callback(obj);
     }
