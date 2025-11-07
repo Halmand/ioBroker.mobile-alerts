@@ -1,0 +1,21 @@
+{
+  "type": "tabs",
+  "items": {
+    "main": {
+      "type": "panel",
+      "label": "Mobile Alerts",
+      "items": {
+        "phoneId": {
+          "type": "text",
+          "label": "Phone ID"
+        },
+        "pollInterval": {
+          "type": "number",
+          "label": "Abfrageintervall (Sekunden)",
+          "min": 10,
+          "max": 3600
+        }
+      }
+    }
+  }
+}
