@@ -28,7 +28,13 @@ class MobileAlerts extends utils.Adapter {
   async fetchData(phoneId) {
     try {
       const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId=${phoneId}`;
-      const { data: html } = await axios.get(url, { timeout: 10000 });
+      const response = await axios.get(url, {
+  timeout: 10000,
+  headers: {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
+  },
+});
       const $ = cheerio.load(html);
 
       const sensors = [];
