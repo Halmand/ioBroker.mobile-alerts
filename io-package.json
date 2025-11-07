@@ -1,21 +1,15 @@
-{
-  "common": {
-    "name": "iobroker.mobile-alerts",
-    "version": "1.0.0",
-    "title": "Mobile Alerts",
-    "desc": "Reads temperature, humidity, battery and timestamp data from measurements.mobile-alerts.eu",
-    "authors": ["Dein Name"],
-    "platform": "Javascript/Node.js",
-    "mode": "daemon",
-    "icon": "mobilealerts.png",
-    "compact": true,
-    "enabled": true,
-    "materialize": true,
-    "dataSource": "poll",
-    "type": "sensor"
+"common": {
+  "name": "ioBroker.mobile-alerts",
+  "version": "1.0.1",
+  "title": "Mobile Alerts",
+  "type": "sensor",
+  "adminUI": {
+    "config": "json"
   },
-  "native": {
-    "phoneId": "035886772208",
-    "pollInterval": 300
-  }
+  "authors": [
+    "Dein Name <you@example.com>"
+  ],
+  "license": "MIT",
+  "main": "main.js",
+  ...
 }
