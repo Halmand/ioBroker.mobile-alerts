@@ -1,15 +1,68 @@
-"common": {
-  "name": "mobile-alerts",
-  "version": "1.0.1",
-  "title": "Mobile Alerts",
-  "type": "sensor",
-  "adminUI": {
-    "config": "json"
+{
+  "common": {
+    "name": "mobile-alerts",
+    "version": "1.0.1",
+    "title": "Mobile Alerts",
+    "titleLang": {
+      "en": "Mobile Alerts",
+      "de": "Mobile Alerts"
+    },
+    "desc": {
+      "en": "Reads temperature, humidity, battery and timestamp data from the Mobile Alerts portal",
+      "de": "Liest Temperatur-, Feuchtigkeits-, Batterie- und Zeitstempeldaten vom Mobile Alerts Portal aus"
+    },
+    "authors": [
+      "Dein Name <you@example.com>"
+    ],
+    "license": "MIT",
+    "platform": "Javascript/Node.js",
+    "mode": "daemon",
+    "icon": "mobile-alerts.png",
+    "materialize": false,
+    "adminUI": {
+      "config": "json"
+    },
+    "messagebox": false,
+    "compact": true,
+    "connectionType": "cloud",
+    "dataSource": "poll",
+    "dependencies": [
+      {
+        "js-controller": ">=5.0.0"
+      }
+    ],
+    "keywords": [
+      "mobile-alerts",
+      "temperature",
+      "humidity",
+      "battery",
+      "sensors"
+    ],
+    "main": "main.js",
+    "type": "sensor",
+    "enabled": true,
+    "readme": "https://github.com/Halmand/ioBroker.mobile-alerts/blob/main/README.md"
   },
-  "authors": [
-    "Dein Name <you@example.com>"
-  ],
-  "license": "MIT",
-  "main": "main.js",
-  ...
+  "native": {
+    "phoneId": "",
+    "pollInterval": 300,
+    "showBattery": true,
+    "showTimestamp": true
+  },
+  "objects": [],
+  "instanceObjects": [
+    {
+      "_id": "info.connection",
+      "type": "state",
+      "common": {
+        "role": "indicator.connected",
+        "name": "Connection to Mobile Alerts API",
+        "type": "boolean",
+        "read": true,
+        "write": false,
+        "def": false
+      },
+      "native": {}
+    }
+  ]
 }
