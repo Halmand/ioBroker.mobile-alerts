@@ -1,5 +1,5 @@
 "common": {
-  "name": "ioBroker.mobile-alerts",
+  "name": "mobile-alerts",
   "version": "1.0.1",
   "title": "Mobile Alerts",
   "type": "sensor",
