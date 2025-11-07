@@ -3,17 +3,30 @@
   "items": {
     "main": {
       "type": "panel",
-      "label": "Mobile Alerts",
+      "label": "Einstellungen",
       "items": {
         "phoneId": {
           "type": "text",
-          "label": "Phone ID"
+          "label": "Phone ID",
+          "help": "Die Mobile-Alerts-Telefon-ID (z. B. 035886772208)"
         },
         "pollInterval": {
           "type": "number",
           "label": "Abfrageintervall (Sekunden)",
-          "min": 10,
-          "max": 3600
+          "min": 30,
+          "max": 3600,
+          "default": 300,
+          "help": "Wie oft sollen Sensordaten aktualisiert werden?"
+        },
+        "showBattery": {
+          "type": "checkbox",
+          "label": "Batteriestatus anzeigen",
+          "default": true
+        },
+        "showTimestamp": {
+          "type": "checkbox",
+          "label": "Zeitstempel anzeigen",
+          "default": true
         }
       }
     }
