@@ -1,21 +1,7 @@
 {
   "common": {
     "name": "mobile-alerts",
-    "version": "1.0.3",
-    "news": {
-      "1.0.3": {
-        "en": "Added optional wind unit conversion (m/s, km/h, Beaufort) and extended support for rain and wind sensors.",
-        "de": "Optionale Umrechnung der Windgeschwindigkeit (m/s, km/h, Beaufort) hinzugefügt und Unterstützung für Regen- und Windsensoren erweitert."
-      },
-      "1.0.2": {
-        "en": "Improved sensor parsing, added timestamp and battery state.",
-        "de": "Sensor-Erkennung verbessert, Zeitstempel und Batteriestatus hinzugefügt."
-      },
-      "1.0.1": {
-        "en": "Initial public release.",
-        "de": "Erste öffentliche Version."
-      }
-    },
+    "version": "1.0.4",
     "title": "Mobile Alerts",
     "titleLang": {
       "en": "Mobile Alerts Sensor Reader",
@@ -26,25 +12,19 @@
       "de": "Liest Temperatur-, Feuchte-, Wind- und Regensensoren von mobile-alerts.eu aus."
     },
     "authors": [
-      "Halmand <your.email@example.com>",
-      "CodeGPT (PulsR AI)"
+      "Halmand",
+      "Code GPT (PulsR AI)"
     ],
-    "keywords": ["mobile-alerts", "weather", "sensors", "temperature", "humidity", "wind", "rain"],
     "license": "MIT",
     "platform": "Javascript/Node.js",
     "mode": "daemon",
+    "type": "weather",
     "icon": "mobile-alerts.png",
     "materialize": true,
-    "enabled": true,
-    "extIcon": "https://raw.githubusercontent.com/Halmand/ioBroker.mobile-alerts/master/admin/mobile-alerts.png",
-    "readme": "https://github.com/Halmand/ioBroker.mobile-alerts/blob/master/README.md",
-    "type": "weather",
-    "loglevel": "info",
+    "adminUI": { "config": "json" },
     "compact": true,
     "connectionType": "cloud",
-    "dataSource": "poll",
-    "restartAdapters": [],
-    "supportCustoms": true
+    "dataSource": "poll"
   },
   "native": {
     "phoneId": "",
@@ -53,47 +33,17 @@
   },
   "instanceObjects": [
     {
-      "_id": "info",
-      "type": "channel",
-      "common": {
-        "name": "Information"
-      },
-      "native": {}
-    },
-    {
       "_id": "info.connection",
       "type": "state",
       "common": {
-        "role": "indicator.connected",
         "name": "Connection to service",
         "type": "boolean",
+        "role": "indicator.connected",
         "read": true,
         "write": false,
         "def": false
       },
       "native": {}
     }
-  ],
-  "config": {
-    "phoneId": {
-      "type": "text",
-      "label": "Phone ID",
-      "default": ""
-    },
-    "pollInterval": {
-      "type": "number",
-      "label": "Abfrageintervall (Sekunden)",
-      "default": 300
-    },
-    "windUnit": {
-      "type": "select",
-      "label": "Windgeschwindigkeit anzeigen als",
-      "options": [
-        { "label": "m/s", "value": "m/s" },
-        { "label": "km/h", "value": "km/h" },
-        { "label": "Beaufort (bft)", "value": "bft" }
-      ],
-      "default": "m/s"
-    }
-  }
+  ]
 }
