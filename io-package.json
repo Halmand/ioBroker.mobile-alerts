@@ -1,20 +1,17 @@
 {
   "common": {
     "name": "mobile-alerts",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "title": "Mobile Alerts",
     "titleLang": {
       "en": "Mobile Alerts Sensor Reader",
       "de": "Mobile Alerts Sensor Ausleser"
     },
     "desc": {
-      "en": "Reads temperature, humidity, wind and rain sensors from mobile-alerts.eu.",
+      "en": "Reads temperature, humidity, wind, and rain sensors from mobile-alerts.eu.",
       "de": "Liest Temperatur-, Feuchte-, Wind- und Regensensoren von mobile-alerts.eu aus."
     },
-    "authors": [
-      "Halmand",
-      "Code GPT (PulsR AI)"
-    ],
+    "authors": ["Halmand", "Code GPT (PulsR AI)"],
     "license": "MIT",
     "platform": "Javascript/Node.js",
     "mode": "daemon",
