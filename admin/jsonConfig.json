@@ -1,32 +1,52 @@
 {
   "type": "tabs",
   "items": {
-    "main": {
+    "general": {
       "type": "panel",
-      "label": "Einstellungen",
+      "label": "Allgemein",
       "items": {
         "phoneId": {
           "type": "text",
           "label": "Phone ID",
-          "help": "Die Mobile-Alerts-Telefon-ID (z. B. 035886772208)"
+          "tooltip": "Deine Mobile Alerts Phone ID. Mehrere IDs können durch Kommas getrennt werden.",
+          "default": ""
         },
         "pollInterval": {
           "type": "number",
           "label": "Abfrageintervall (Sekunden)",
-          "min": 30,
+          "tooltip": "Wie oft sollen die Daten von mobile-alerts.eu abgerufen werden?",
+          "min": 60,
           "max": 3600,
-          "default": 300,
-          "help": "Wie oft sollen Sensordaten aktualisiert werden?"
+          "default": 300
         },
-        "showBattery": {
-          "type": "checkbox",
-          "label": "Batteriestatus anzeigen",
-          "default": true
+        "windUnit": {
+          "type": "select",
+          "label": "Windgeschwindigkeit anzeigen als",
+          "tooltip": "Wähle die Einheit, in der Windgeschwindigkeiten angezeigt werden sollen.",
+          "options": [
+            { "label": "Meter pro Sekunde (m/s)", "value": "m/s" },
+            { "label": "Kilometer pro Stunde (km/h)", "value": "km/h" },
+            { "label": "Beaufort (bft)", "value": "bft" }
+          ],
+          "default": "m/s"
+        }
+      }
+    },
+    "info": {
+      "type": "panel",
+      "label": "Information",
+      "items": {
+        "_doc1": {
+          "type": "static-text",
+          "text": "Dieser Adapter liest Sensordaten von Mobile-Alerts.eu aus und unterstützt Temperatur-, Feuchte-, Wind- und Regensensoren."
         },
-        "showTimestamp": {
-          "type": "checkbox",
-          "label": "Zeitstempel anzeigen",
-          "default": true
+        "_doc2": {
+          "type": "static-text",
+          "text": "Du kannst mehrere PhoneIDs mit Kommas getrennt eintragen, um mehrere Gateways auszulesen."
+        },
+        "_doc3": {
+          "type": "static-text",
+          "text": "Windgeschwindigkeiten können wahlweise in m/s, km/h oder Beaufort angezeigt werden."
         }
       }
     }
