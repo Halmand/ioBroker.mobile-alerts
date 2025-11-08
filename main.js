@@ -70,18 +70,19 @@ class MobileAlerts extends utils.Adapter {
         if (tempOut) data.temperature_out = parseFloat(tempOut[1].replace(',', '.'));
         if (humOut) data.humidity_out = parseFloat(humOut[1].replace(',', '.'));
 
-        // 🌧️ Regen-Sensoren
-        const rainTotal = text.match(/Gesamt\s+([\d,.-]+)\s*mm/i);
-        const rainRate = text.match(/Rate\s+([\d,.-]+)\s*mm\/h/i);
-        if (rainTotal) data.rain_total = parseFloat(rainTotal[1].replace(',', '.'));
-        if (rainRate) data.rain_rate = parseFloat(rainRate[1].replace(',', '.'));
+        // 🌧️ Regen-Sensoren (aktuelle mobile-alerts Struktur)
+        const rainMatch = text.match(/Regen\s+([\d,.-]+)\s*mm/i);
+        if (rainMatch) {
+          data.rain = parseFloat(rainMatch[1].replace(',', '.'));
+        }
 
-        // 🌬️ Wind-Sensoren
+        // 🌬️ Wind-Sensoren (aktuelle mobile-alerts Struktur)
         const windSpeed = text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i);
-        const windMax = text.match(/Windspitze\s+([\d,.-]+)\s*m\/s/i);
-        const windDir = text.match(/Windrichtung\s+([\w\s°]+)/i);
+        const windGust = text.match(/Böe\s+([\d,.-]+)\s*m\/s/i);
+        const windDir = text.match(/Windrichtung\s+([\wÄÖÜäöüß\s°-]+)/i);
+
         if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
-        if (windMax) data.wind_gust = this.convertWind(parseFloat(windMax[1].replace(',', '.')));
+        if (windGust) data.wind_gust = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
         if (windDir) data.wind_dir = windDir[1].trim();
 
         sensors.push(data);
