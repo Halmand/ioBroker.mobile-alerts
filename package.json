@@ -1,17 +1,86 @@
 {
   "name": "iobroker.mobile-alerts",
-  "version": "1.0.2",
-  "description": "Adapter zum Auslesen von Temperatur-, Feuchtigkeits-, Batteriestatus- und Zeitdaten von Mobile Alerts",
-  "author": "Halmand GPT5",
+  "version": "1.0.3",
+  "description": "ioBroker Adapter to read temperature, humidity, wind and rain sensors from mobile-alerts.eu",
+  "author": {
+    "name": "Halmand",
+    "email": "halmand@example.com"
+  },
+  "contributors": [
+    {
+      "name": "Code GPT (PulsR AI)",
+      "email": "dev@pulsr.ai"
+    }
+  ],
   "license": "MIT",
+  "keywords": [
+    "ioBroker",
+    "mobile-alerts",
+    "weather",
+    "sensors",
+    "temperature",
+    "humidity",
+    "wind",
+    "rain"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Halmand/ioBroker.mobile-alerts"
+  },
   "main": "main.js",
   "scripts": {
-    "start": "node main.js"
+    "test": "echo \"No test specified\" && exit 0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   },
   "dependencies": {
-    "axios": "^1.7.2",
-    "cheerio": "^1.0.0-rc.12",
-    "@iobroker/adapter-core": "^3.1.0"
+    "@iobroker/adapter-core": "^3.0.0",
+    "axios": "^1.7.0",
+    "cheerio": "^1.0.0-rc.12"
   },
-  "keywords": ["ioBroker", "mobile alerts", "temperature", "humidity", "battery"]
+  "devDependencies": {},
+  "files": [
+    "main.js",
+    "io-package.json",
+    "admin/jsonConfig.json",
+    "admin/mobile-alerts.png",
+    "README.md"
+  ],
+  "directories": {
+    "lib": "lib",
+    "admin": "admin"
+  },
+  "iobroker": {
+    "common": {
+      "name": "mobile-alerts",
+      "version": "1.0.3",
+      "title": "Mobile Alerts",
+      "titleLang": {
+        "en": "Mobile Alerts Sensor Reader",
+        "de": "Mobile Alerts Sensor Ausleser"
+      },
+      "desc": {
+        "en": "Reads temperature, humidity, wind and rain sensors from mobile-alerts.eu.",
+        "de": "Liest Temperatur-, Feuchte-, Wind- und Regensensoren von mobile-alerts.eu aus."
+      },
+      "platform": "Javascript/Node.js",
+      "mode": "daemon",
+      "type": "weather",
+      "icon": "mobile-alerts.png",
+      "materialize": true,
+      "adminUI": {
+        "config": "json"
+      },
+      "compact": true,
+      "connectionType": "cloud",
+      "dataSource": "poll",
+      "enabled": true
+    },
+    "native": {
+      "phoneId": "",
+      "pollInterval": 300,
+      "windUnit": "m/s"
+    }
+  }
 }
