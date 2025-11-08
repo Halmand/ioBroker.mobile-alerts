@@ -8,20 +8,59 @@
       "de": "Mobile Alerts Sensor Ausleser"
     },
     "desc": {
-      "en": "Reads temperature, humidity, wind, and rain sensors from mobile-alerts.eu.",
+      "en": "Reads temperature, humidity, wind and rain sensors from mobile-alerts.eu.",
       "de": "Liest Temperatur-, Feuchte-, Wind- und Regensensoren von mobile-alerts.eu aus."
     },
-    "authors": ["Halmand", "Code GPT (PulsR AI)"],
+    "authors": [
+      "Halmand <halmand@users.noreply.github.com>",
+      "Code GPT (PulsR AI)"
+    ],
     "license": "MIT",
     "platform": "Javascript/Node.js",
     "mode": "daemon",
     "type": "weather",
     "icon": "mobile-alerts.png",
+    "extIcon": "https://raw.githubusercontent.com/Halmand/ioBroker.mobile-alerts/master/admin/mobile-alerts.png",
+    "readme": "https://github.com/Halmand/ioBroker.mobile-alerts/blob/master/README.md",
+    "loglevel": "info",
     "materialize": true,
     "adminUI": { "config": "json" },
     "compact": true,
     "connectionType": "cloud",
-    "dataSource": "poll"
+    "dataSource": "poll",
+    "restartAdapters": [],
+    "enabled": true,
+    "singleton": false,
+    "news": {
+      "1.0.5": {
+        "en": "Added full rain and wind sensor support, improved HTML parsing and UI fix.",
+        "de": "Vollständige Regen- und Windsensor-Unterstützung, verbessertes HTML-Parsing und UI-Korrektur."
+      },
+      "1.0.4": {
+        "en": "Fixed missing rain sensor parsing and improved wind speed conversion.",
+        "de": "Fehler bei Regen-Sensor-Erkennung behoben, Windumrechnung verbessert."
+      },
+      "1.0.3": {
+        "en": "Added multi-phone ID support and JSON config UI.",
+        "de": "Mehrere PhoneIDs unterstützt und neue JSON-Konfigurationsoberfläche hinzugefügt."
+      }
+    },
+    "maintainers": [
+      {
+        "name": "Halmand",
+        "email": "halmand@users.noreply.github.com"
+      }
+    ],
+    "keywords": [
+      "mobile alerts",
+      "weather",
+      "sensors",
+      "iobroker",
+      "temperature",
+      "humidity",
+      "rain",
+      "wind"
+    ]
   },
   "native": {
     "phoneId": "",
