@@ -1,99 +1,54 @@
 {
-  "common": {
-    "name": "mobile-alerts",
-    "version": "1.0.3",
-    "news": {
-      "1.0.3": {
-        "en": "Added optional wind unit conversion (m/s, km/h, Beaufort) and extended support for rain and wind sensors.",
-        "de": "Optionale Umrechnung der Windgeschwindigkeit (m/s, km/h, Beaufort) hinzugefügt und Unterstützung für Regen- und Windsensoren erweitert."
-      },
-      "1.0.2": {
-        "en": "Improved sensor parsing, added timestamp and battery state.",
-        "de": "Sensor-Erkennung verbessert, Zeitstempel und Batteriestatus hinzugefügt."
-      },
-      "1.0.1": {
-        "en": "Initial public release.",
-        "de": "Erste öffentliche Version."
+  "type": "tabs",
+  "items": {
+    "general": {
+      "type": "panel",
+      "label": "Allgemein",
+      "items": {
+        "phoneId": {
+          "type": "text",
+          "label": "Phone ID",
+          "tooltip": "Deine Mobile Alerts Phone ID. Mehrere IDs können durch Kommas getrennt werden.",
+          "default": ""
+        },
+        "pollInterval": {
+          "type": "number",
+          "label": "Abfrageintervall (Sekunden)",
+          "tooltip": "Wie oft sollen die Daten von mobile-alerts.eu abgerufen werden?",
+          "min": 60,
+          "max": 3600,
+          "default": 300
+        },
+        "windUnit": {
+          "type": "select",
+          "label": "Windgeschwindigkeit anzeigen als",
+          "tooltip": "Wähle die Einheit, in der Windgeschwindigkeiten angezeigt werden sollen.",
+          "options": [
+            { "label": "Meter pro Sekunde (m/s)", "value": "m/s" },
+            { "label": "Kilometer pro Stunde (km/h)", "value": "km/h" },
+            { "label": "Beaufort (bft)", "value": "bft" }
+          ],
+          "default": "m/s"
+        }
       }
     },
-    "title": "Mobile Alerts",
-    "titleLang": {
-      "en": "Mobile Alerts Sensor Reader",
-      "de": "Mobile Alerts Sensor Ausleser"
-    },
-    "desc": {
-      "en": "Reads temperature, humidity, wind and rain sensors from mobile-alerts.eu.",
-      "de": "Liest Temperatur-, Feuchte-, Wind- und Regensensoren von mobile-alerts.eu aus."
-    },
-    "authors": [
-      "Halmand <your.email@example.com>",
-      "CodeGPT (PulsR AI)"
-    ],
-    "keywords": ["mobile-alerts", "weather", "sensors", "temperature", "humidity", "wind", "rain"],
-    "license": "MIT",
-    "platform": "Javascript/Node.js",
-    "mode": "daemon",
-    "icon": "mobile-alerts.png",
-    "materialize": true,
-    "enabled": true,
-    "extIcon": "https://raw.githubusercontent.com/Halmand/ioBroker.mobile-alerts/master/admin/mobile-alerts.png",
-    "readme": "https://github.com/Halmand/ioBroker.mobile-alerts/blob/master/README.md",
-    "type": "weather",
-    "loglevel": "info",
-    "compact": true,
-    "connectionType": "cloud",
-    "dataSource": "poll",
-    "restartAdapters": [],
-    "supportCustoms": true
-  },
-  "native": {
-    "phoneId": "",
-    "pollInterval": 300,
-    "windUnit": "m/s"
-  },
-  "instanceObjects": [
-    {
-      "_id": "info",
-      "type": "channel",
-      "common": {
-        "name": "Information"
-      },
-      "native": {}
-    },
-    {
-      "_id": "info.connection",
-      "type": "state",
-      "common": {
-        "role": "indicator.connected",
-        "name": "Connection to service",
-        "type": "boolean",
-        "read": true,
-        "write": false,
-        "def": false
-      },
-      "native": {}
-    }
-  ],
-  "config": {
-    "phoneId": {
-      "type": "text",
-      "label": "Phone ID",
-      "default": ""
-    },
-    "pollInterval": {
-      "type": "number",
-      "label": "Abfrageintervall (Sekunden)",
-      "default": 300
-    },
-    "windUnit": {
-      "type": "select",
-      "label": "Windgeschwindigkeit anzeigen als",
-      "options": [
-        { "label": "m/s", "value": "m/s" },
-        { "label": "km/h", "value": "km/h" },
-        { "label": "Beaufort (bft)", "value": "bft" }
-      ],
-      "default": "m/s"
+    "info": {
+      "type": "panel",
+      "label": "Information",
+      "items": {
+        "_doc1": {
+          "type": "static-text",
+          "text": "Dieser Adapter liest Sensordaten von Mobile-Alerts.eu aus und unterstützt Temperatur-, Feuchte-, Wind- und Regensensoren."
+        },
+        "_doc2": {
+          "type": "static-text",
+          "text": "Du kannst mehrere PhoneIDs mit Kommas getrennt eintragen, um mehrere Gateways auszulesen."
+        },
+        "_doc3": {
+          "type": "static-text",
+          "text": "Windgeschwindigkeiten können wahlweise in m/s, km/h oder Beaufort angezeigt werden."
+        }
+      }
     }
   }
 }
