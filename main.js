@@ -12,19 +12,25 @@ class MobileAlerts extends utils.Adapter {
   }
 
   async onReady() {
-    const phoneId = this.config.phoneId;
+    const phoneIds = (this.config.phoneId || '')
+      .split(',')
+      .map(id => id.trim())
+      .filter(Boolean);
+
     const pollInterval = this.config.pollInterval || 300;
     this.windUnit = this.config.windUnit || 'm/s';
 
-    if (!phoneId) {
+    if (!phoneIds.length) {
       this.log.error('Keine PhoneID angegeben!');
       return;
     }
 
-    this.log.info(`Lese Sensordaten für PhoneID ${phoneId}...`);
-    await this.fetchData(phoneId);
+    this.log.info(`Lese Sensordaten für PhoneIDs: ${phoneIds.join(', ')}`);
+    for (const id of phoneIds) await this.fetchData(id);
 
-    this.pollTimer = setInterval(() => this.fetchData(phoneId), pollInterval * 1000);
+    this.pollTimer = setInterval(async () => {
+      for (const id of phoneIds) await this.fetchData(id);
+    }, pollInterval * 1000);
   }
 
   async fetchData(phoneId) {
@@ -33,7 +39,6 @@ class MobileAlerts extends utils.Adapter {
       const response = await axios.get(url, { timeout: 15000 });
       const html = response.data;
       const $ = cheerio.load(html);
-
       const sensors = [];
 
       $('div.sensor, table.table').each((i, sensorEl) => {
@@ -47,7 +52,7 @@ class MobileAlerts extends utils.Adapter {
         const timestamp = timeMatch ? timeMatch[1].trim() : null;
 
         let battery = 'ok';
-        if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) {
+        if (/batterie\s*(schwach|low|leer|empty)/i.test(text) || /🔋|battery low/i.test(text)) {
           battery = 'low';
         }
 
@@ -83,12 +88,12 @@ class MobileAlerts extends utils.Adapter {
       });
 
       if (!sensors.length) {
-        this.log.warn('Keine Sensoren gefunden. Prüfe die PhoneID oder Portal-Seite.');
+        this.log.warn(`Keine Sensoren für PhoneID ${phoneId} gefunden.`);
         return;
       }
 
       for (const sensor of sensors) {
-        const sid = sensor.name.replace(/\s+/g, '_');
+        const sid = `Phone_${phoneId}.${sensor.name.replace(/\s+/g, '_')}`;
         await this.setObjectNotExistsAsync(sid, {
           type: 'channel',
           common: { name: sensor.name },
@@ -113,10 +118,10 @@ class MobileAlerts extends utils.Adapter {
         }
       }
 
-      this.log.info(`Erfolgreich ${sensors.length} Sensor(en) aktualisiert.`);
+      this.log.info(`Erfolgreich ${sensors.length} Sensor(en) für PhoneID ${phoneId} aktualisiert.`);
       await this.setStateAsync('info.connection', { val: true, ack: true });
     } catch (err) {
-      this.log.error(`Fehler beim Abruf: ${err.message}`);
+      this.log.error(`Fehler beim Abruf (PhoneID ${phoneId}): ${err.message}`);
       await this.setStateAsync('info.connection', { val: false, ack: true });
     }
   }
@@ -127,7 +132,7 @@ class MobileAlerts extends utils.Adapter {
         return +(value * 3.6).toFixed(1);
       case 'bft':
         const bft = Math.pow(value / 0.836, 2 / 3);
-        return +Math.round(bft);
+        return Math.min(12, Math.round(bft));
       default:
         return value;
     }
