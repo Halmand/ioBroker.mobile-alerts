@@ -10,7 +10,10 @@ class MobileAlerts extends utils.Adapter {
       ...options,
       name: 'mobile-alerts',
     });
+
     this.on('ready', this.onReady.bind(this));
+    this.on('unload', this.onUnload.bind(this));
+
     this.pollTimer = null;
   }
 
@@ -47,7 +50,6 @@ class MobileAlerts extends utils.Adapter {
 
       const sensors = [];
 
-      // Versuch, Datenstrukturen zu finden
       $('div.sensor').each((i, el) => {
         const name = $(el).find('.name').text().trim() || `Sensor_${i + 1}`;
         const temperature = $(el).find('.temperature .value').text().trim();
@@ -58,7 +60,7 @@ class MobileAlerts extends utils.Adapter {
         sensors.push({ name, temperature, humidity, battery, timestamp });
       });
 
-      // Alternativer Parser für Tabellenlayout (Fallback)
+      // Fallback: falls HTML andere Struktur hat
       if (sensors.length === 0) {
         $('table.table tr').each((i, row) => {
           const cols = $(row).find('td');
@@ -67,7 +69,7 @@ class MobileAlerts extends utils.Adapter {
             const temperature = $(cols[1]).text().trim();
             const humidity = $(cols[2]).text().trim();
             const battery = $(cols[3]).text().includes('low') ? 'low' : 'ok';
-            const timestamp = $(cols[4]) ? $(cols[4]).text().trim() : '';
+            const timestamp = cols[4] ? $(cols[4]).text().trim() : '';
             if (name && temperature) {
               sensors.push({ name, temperature, humidity, battery, timestamp });
             }
