@@ -1,5 +1,3 @@
-'use strict';
-
 const utils = require('@iobroker/adapter-core');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -10,11 +8,7 @@ class MobileAlerts extends utils.Adapter {
       ...options,
       name: 'mobile-alerts',
     });
-
     this.on('ready', this.onReady.bind(this));
-    this.on('unload', this.onUnload.bind(this));
-
-    this.pollTimer = null;
   }
 
   async onReady() {
@@ -22,64 +16,56 @@ class MobileAlerts extends utils.Adapter {
     const pollInterval = this.config.pollInterval || 300;
 
     if (!phoneId) {
-      this.log.error('Keine PhoneID angegeben! Bitte in den Instanzeinstellungen eintragen.');
+      this.log.error('Keine PhoneID angegeben!');
       return;
     }
 
     this.log.info(`Lese Sensordaten für PhoneID ${phoneId}...`);
     await this.fetchData(phoneId);
 
-    // Wiederhole Abruf im Intervall
     this.pollTimer = setInterval(() => this.fetchData(phoneId), pollInterval * 1000);
   }
 
   async fetchData(phoneId) {
     try {
       const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId=${phoneId}`;
-      const response = await axios.get(url, {
-        timeout: 10000,
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-          'Accept-Language': 'de-DE,de;q=0.9,en;q=0.8',
-        },
-      });
-
+      const response = await axios.get(url, { timeout: 15000 });
       const html = response.data;
       const $ = cheerio.load(html);
 
       const sensors = [];
 
-      $('div.sensor').each((i, el) => {
-        const name = $(el).find('.name').text().trim() || `Sensor_${i + 1}`;
-        const temperature = $(el).find('.temperature .value').text().trim();
-        const humidity = $(el).find('.humidity .value').text().trim();
-        const battery = $(el).find('.battery').text().includes('low') ? 'low' : 'ok';
-        const timestamp = $(el).find('.time').text().trim();
+      $('div.sensor, table.table').each((i, sensorEl) => {
+        const text = $(sensorEl).text().trim().replace(/\s+/g, ' ');
+        const nameMatch = text.match(/^(.*?) ID /);
+        const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
+        const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+)/);
+        const tempMatches = [...text.matchAll(/Temperatur(?:\s+Innen)?\s+([\d,.-]+)\s*C/gi)];
+        const humMatches = [...text.matchAll(/Luftfeuchte(?:\s+Innen)?\s+([\d,.-]+)\s*%/gi)];
 
-        sensors.push({ name, temperature, humidity, battery, timestamp });
+        if (!nameMatch) return;
+        const name = nameMatch[1].trim();
+        const id = idMatch ? idMatch[1] : null;
+        const timestamp = timeMatch ? timeMatch[1].trim() : null;
+
+        // Innen/Außen-Logik
+        if (text.includes('Temperatur Außen')) {
+          const tempOut = parseFloat((text.match(/Temperatur Außen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
+          const humOut = parseFloat((text.match(/Luftfeuchte Außen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
+          const tempIn = parseFloat((text.match(/Temperatur Innen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
+          const humIn = parseFloat((text.match(/Luftfeuchte Innen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
+
+          sensors.push({ name: `${name}_Innen`, temperature: tempIn, humidity: humIn, timestamp, id });
+          sensors.push({ name: `${name}_Außen`, temperature: tempOut, humidity: humOut, timestamp, id });
+        } else {
+          const temp = tempMatches[0] ? parseFloat(tempMatches[0][1].replace(',', '.')) : NaN;
+          const hum = humMatches[0] ? parseFloat(humMatches[0][1].replace(',', '.')) : NaN;
+          sensors.push({ name, temperature: temp, humidity: hum, timestamp, id });
+        }
       });
 
-      // Fallback: falls HTML andere Struktur hat
-      if (sensors.length === 0) {
-        $('table.table tr').each((i, row) => {
-          const cols = $(row).find('td');
-          if (cols.length >= 4) {
-            const name = $(cols[0]).text().trim();
-            const temperature = $(cols[1]).text().trim();
-            const humidity = $(cols[2]).text().trim();
-            const battery = $(cols[3]).text().includes('low') ? 'low' : 'ok';
-            const timestamp = cols[4] ? $(cols[4]).text().trim() : '';
-            if (name && temperature) {
-              sensors.push({ name, temperature, humidity, battery, timestamp });
-            }
-          }
-        });
-      }
-
-      if (sensors.length === 0) {
-        this.log.warn('Keine Sensoren gefunden. Prüfe die PhoneID oder das HTML-Layout der Seite.');
-        await this.setStateAsync('info.connection', { val: false, ack: true });
+      if (!sensors.length) {
+        this.log.warn('Keine Sensoren gefunden. Prüfe die PhoneID oder Portal-Seite.');
         return;
       }
 
@@ -91,31 +77,21 @@ class MobileAlerts extends utils.Adapter {
           native: {},
         });
 
-        await this.setObjectNotExistsAsync(`${sid}.temperature`, {
-          type: 'state',
-          common: { name: 'Temperatur', type: 'number', unit: '°C', role: 'value.temperature', read: true, write: false },
-          native: {},
-        });
-        await this.setObjectNotExistsAsync(`${sid}.humidity`, {
-          type: 'state',
-          common: { name: 'Luftfeuchtigkeit', type: 'number', unit: '%', role: 'value.humidity', read: true, write: false },
-          native: {},
-        });
-        await this.setObjectNotExistsAsync(`${sid}.battery`, {
-          type: 'state',
-          common: { name: 'Batteriestatus', type: 'string', role: 'indicator.battery', read: true, write: false },
-          native: {},
-        });
-        await this.setObjectNotExistsAsync(`${sid}.timestamp`, {
-          type: 'state',
-          common: { name: 'Zeitstempel', type: 'string', role: 'date', read: true, write: false },
-          native: {},
-        });
+        const states = {
+          temperature: { val: isNaN(sensor.temperature) ? null : sensor.temperature, unit: '°C' },
+          humidity: { val: isNaN(sensor.humidity) ? null : sensor.humidity, unit: '%' },
+          timestamp: { val: sensor.timestamp || '', unit: '' },
+          id: { val: sensor.id || '', unit: '' },
+        };
 
-        await this.setStateAsync(`${sid}.temperature`, { val: parseFloat(sensor.temperature) || null, ack: true });
-        await this.setStateAsync(`${sid}.humidity`, { val: parseFloat(sensor.humidity) || null, ack: true });
-        await this.setStateAsync(`${sid}.battery`, { val: sensor.battery, ack: true });
-        await this.setStateAsync(`${sid}.timestamp`, { val: sensor.timestamp, ack: true });
+        for (const [key, value] of Object.entries(states)) {
+          await this.setObjectNotExistsAsync(`${sid}.${key}`, {
+            type: 'state',
+            common: { name: key, type: 'string', role: 'value', read: true, write: false, unit: value.unit },
+            native: {},
+          });
+          await this.setStateAsync(`${sid}.${key}`, { val: value.val, ack: true });
+        }
       }
 
       this.log.info(`Erfolgreich ${sensors.length} Sensor(en) aktualisiert.`);
@@ -123,15 +99,6 @@ class MobileAlerts extends utils.Adapter {
     } catch (err) {
       this.log.error(`Fehler beim Abruf: ${err.message}`);
       await this.setStateAsync('info.connection', { val: false, ack: true });
-    }
-  }
-
-  onUnload(callback) {
-    try {
-      if (this.pollTimer) clearInterval(this.pollTimer);
-      callback();
-    } catch (e) {
-      callback();
     }
   }
 }
