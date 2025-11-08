@@ -40,6 +40,7 @@ Phone ID(s)	Eine oder mehrere PhoneIDs vom Mobile Alerts Account, getrennt durch
 Abfrageintervall (Sekunden)	Wie oft der Adapter die Werte von der Website abruft
 Windgeschwindigkeitseinheit	m/s, km/h oder bft
 ```
+
 ---
 
 🧑‍💻 Entwickler
@@ -48,6 +49,8 @@ Autor: Halmand
 
 Mitentwickelt von: Code GPT (PulsR AI)
 Lizenz: MIT License
+
+---
 
 🧾 Changelog
 1.0.5 (2025-11-08)
