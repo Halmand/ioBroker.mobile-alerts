@@ -37,30 +37,41 @@ class MobileAlerts extends utils.Adapter {
 
       $('div.sensor, table.table').each((i, sensorEl) => {
         const text = $(sensorEl).text().trim().replace(/\s+/g, ' ');
+        if (!text) return;
+
         const nameMatch = text.match(/^(.*?) ID /);
         const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
         const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+)/);
-        const tempMatches = [...text.matchAll(/Temperatur(?:\s+Innen)?\s+([\d,.-]+)\s*C/gi)];
-        const humMatches = [...text.matchAll(/Luftfeuchte(?:\s+Innen)?\s+([\d,.-]+)\s*%/gi)];
+        const batteryMatch = text.match(/Batterie\s*(\w+)?/i);
 
-        if (!nameMatch) return;
-        const name = nameMatch[1].trim();
+        // Batterieerkennung (Symbol oder Text)
+        let battery = 'ok';
+        if (batteryMatch && /schwach|low|leer|empty/i.test(batteryMatch[1] || '')) {
+          battery = 'low';
+        } else if (/batterie\s*(schwach|low)/i.test(text) || /🔋|battery low/i.test(text)) {
+          battery = 'low';
+        }
+
         const id = idMatch ? idMatch[1] : null;
         const timestamp = timeMatch ? timeMatch[1].trim() : null;
 
-        // Innen/Außen-Logik
+        // Innen/Außen-Erkennung
         if (text.includes('Temperatur Außen')) {
           const tempOut = parseFloat((text.match(/Temperatur Außen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
           const humOut = parseFloat((text.match(/Luftfeuchte Außen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
           const tempIn = parseFloat((text.match(/Temperatur Innen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
           const humIn = parseFloat((text.match(/Luftfeuchte Innen\s+([\d,.-]+)/) || [])[1]?.replace(',', '.') || 'NaN');
 
-          sensors.push({ name: `${name}_Innen`, temperature: tempIn, humidity: humIn, timestamp, id });
-          sensors.push({ name: `${name}_Außen`, temperature: tempOut, humidity: humOut, timestamp, id });
+          sensors.push({ name: `${nameMatch[1].trim()}_Innen`, temperature: tempIn, humidity: humIn, timestamp, id, battery });
+          sensors.push({ name: `${nameMatch[1].trim()}_Außen`, temperature: tempOut, humidity: humOut, timestamp, id, battery });
         } else {
-          const temp = tempMatches[0] ? parseFloat(tempMatches[0][1].replace(',', '.')) : NaN;
-          const hum = humMatches[0] ? parseFloat(humMatches[0][1].replace(',', '.')) : NaN;
-          sensors.push({ name, temperature: temp, humidity: hum, timestamp, id });
+          const tempMatch = text.match(/Temperatur\s+([\d,.-]+)\s*C/i);
+          const humMatch = text.match(/Luftfeuchte\s+([\d,.-]+)\s*%/i);
+          const temp = tempMatch ? parseFloat(tempMatch[1].replace(',', '.')) : NaN;
+          const hum = humMatch ? parseFloat(humMatch[1].replace(',', '.')) : NaN;
+          const name = nameMatch ? nameMatch[1].trim() : `Sensor_${i + 1}`;
+
+          sensors.push({ name, temperature: temp, humidity: hum, timestamp, id, battery });
         }
       });
 
@@ -78,16 +89,17 @@ class MobileAlerts extends utils.Adapter {
         });
 
         const states = {
-          temperature: { val: isNaN(sensor.temperature) ? null : sensor.temperature, unit: '°C' },
-          humidity: { val: isNaN(sensor.humidity) ? null : sensor.humidity, unit: '%' },
-          timestamp: { val: sensor.timestamp || '', unit: '' },
-          id: { val: sensor.id || '', unit: '' },
+          temperature: { val: isNaN(sensor.temperature) ? null : sensor.temperature, unit: '°C', role: 'value.temperature' },
+          humidity: { val: isNaN(sensor.humidity) ? null : sensor.humidity, unit: '%', role: 'value.humidity' },
+          timestamp: { val: sensor.timestamp || '', unit: '', role: 'value.time' },
+          id: { val: sensor.id || '', unit: '', role: 'text' },
+          battery: { val: sensor.battery, unit: '', role: 'indicator.battery' },
         };
 
         for (const [key, value] of Object.entries(states)) {
           await this.setObjectNotExistsAsync(`${sid}.${key}`, {
             type: 'state',
-            common: { name: key, type: 'string', role: 'value', read: true, write: false, unit: value.unit },
+            common: { name: key, type: 'string', role: value.role, read: true, write: false, unit: value.unit },
             native: {},
           });
           await this.setStateAsync(`${sid}.${key}`, { val: value.val, ack: true });
