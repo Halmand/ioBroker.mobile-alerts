@@ -16,7 +16,7 @@
           "label": "Abfrageintervall (Sekunden)",
           "min": 60,
           "max": 3600,
-          "default": 300
+          "default": 600
         },
         "windUnit": {
           "type": "select",
