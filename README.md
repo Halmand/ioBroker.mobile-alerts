@@ -54,9 +54,8 @@ Lizenz: MIT License
 ---
 
 🧾 Changelog
-
-1.0.6 (2025-11-28)
- 🚀 Erweiterungen
+## **1.0.6 (2025-11-28)**
+### 🚀 Erweiterungen
 - Unterstützung für **Temperatur-Kabelsensoren** (z. B. MA10430 / MA10860)
 - Historische **Luftfeuchte-Durchschnittswerte** hinzugefügt:
   - 3 Stunden (`humidity_avg_3h`)
@@ -68,29 +67,52 @@ Lizenz: MIT License
 - Logging-Ausgabe optimiert (zeigt PhoneID pro Abruf)
 - Neue Objektstruktur: `Phone_<ID>.<Sensorname>.<Messwert>`
 
+---
 
-1.0.5 (2025-11-08)
+## **1.0.5 (2025-11-08)**
+### 🌦️ Neue Funktionen
+- Unterstützung für **Wind- & Regensensoren**
+  - `wind_speed`, `wind_gust`, `wind_dir`
+  - `rain_total`, `rain_rate`
+- Parser an HTML-Struktur von Mobile Alerts angepasst
+- Unterstützung für **mehrere PhoneIDs**
+- Neue Einheiten für Windgeschwindigkeit:
+  - `m/s`, `km/h`, `bft`
+- Verbesserte Fehlerbehandlung bei nicht erreichbarem Portal
+- JSON-Admin-UI hinzugefügt
+- Behebung des „404 index_m.html not found“-Fehlers
 
-Vollständige Regen- und Windsensor-Unterstützung
+---
 
-Parser verbessert (HTML-Anpassungen)
+## **1.0.4 (2025-11-07)**
+### ⚙️ Verbesserungen
+- Regen-Sensor Parsing ergänzt  
+- Fehlerbehandlung für unvollständige HTML-Blöcke hinzugefügt  
+- Stabilität beim Mehrfach-Abruf verbessert  
 
-Mehrere PhoneIDs unterstützt
+---
 
-JSON Admin UI hinzugefügt
+## **1.0.3 (2025-11-05)**
+### 🔧 Änderungen
+- Parser vollständig überarbeitet (kompatibel mit Cheerio / Axios)
+- Strukturierte Objektanlage nach Sensorname
+- Admin-UI auf JSON-Konfiguration umgestellt
+- Batteriestatus-Logik verbessert
 
-UI-404 Fehler behoben
+---
 
-1.0.4
+## **1.0.2 (2025-11-02)**
+### 🧩 Erste stabile Testversion
+- Grundlegende Funktion:
+  - Temperatur und Luftfeuchte auslesen
+  - Zeitstempel speichern
+  - Batteriestatus erfassen
+- Unterstützung für mehrere Sensoren pro PhoneID
 
-Regen-Sensor Parsing ergänzt
+---
 
-Windgeschwindigkeit und Böen erweitert
-
-1.0.3
-
-Mehrere Gateways (PhoneIDs) unterstützt
-
-Neues JSON-basiertes Admin-UI
-
-
+## **1.0.0 (2025-10-29)**
+### 🎉 Erstveröffentlichung
+- Initiale Adapterstruktur erstellt  
+- iobroker.admin Integration vorbereitet  
+- Basis für Sensordaten-Abruf gelegt  
