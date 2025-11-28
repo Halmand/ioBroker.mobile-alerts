@@ -54,6 +54,21 @@ Lizenz: MIT License
 ---
 
 🧾 Changelog
+
+1.0.6 (2025-11-28)
+ 🚀 Erweiterungen
+- Unterstützung für **Temperatur-Kabelsensoren** (z. B. MA10430 / MA10860)
+- Historische **Luftfeuchte-Durchschnittswerte** hinzugefügt:
+  - 3 Stunden (`humidity_avg_3h`)
+  - 24 Stunden (`humidity_avg_24h`)
+  - 7 Tage (`humidity_avg_7d`)
+  - 30 Tage (`humidity_avg_30d`)
+- Automatische Konvertierung von Komma-Dezimalwerten (z. B. `24,7` → `24.7`)
+- Parser für Kombi-Temperatursensoren verbessert
+- Logging-Ausgabe optimiert (zeigt PhoneID pro Abruf)
+- Neue Objektstruktur: `Phone_<ID>.<Sensorname>.<Messwert>`
+
+
 1.0.5 (2025-11-08)
 
 Vollständige Regen- und Windsensor-Unterstützung
