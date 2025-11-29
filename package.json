@@ -1,6 +1,6 @@
 {
   "name": "iobroker.mobile-alerts",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "ioBroker Adapter to read temperature, humidity, wind and rain sensors from mobile-alerts.eu",
   "main": "main.js",
   "author": "Halmand",
