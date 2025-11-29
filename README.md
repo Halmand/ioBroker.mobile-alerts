@@ -54,7 +54,7 @@ Lizenz: MIT License
 ---
 
 🧾 Changelog
-## **1.0.7 (2025-11-28)**
+## **1.0.7 (2025-11-29)**
 -kleiner Bugfix in der jsonConfig.json
 
 ---
