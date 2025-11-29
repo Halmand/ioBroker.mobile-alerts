@@ -54,6 +54,11 @@ Lizenz: MIT License
 ---
 
 🧾 Changelog
+## **1.0.7 (2025-11-28)**
+-kleiner Bugfix in der jsonConfig.json
+
+---
+
 ## **1.0.6 (2025-11-28)**
 ### 🚀 Erweiterungen
 - Unterstützung für **Temperatur-Kabelsensoren** (z. B. MA10430 / MA10860)
