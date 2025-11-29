@@ -1,48 +1,54 @@
 {
-  "type": "tabs",
+  "type": "panel",
+  "label": "Mobile Alerts Einstellungen",
   "items": {
-    "general": {
-      "type": "panel",
-      "label": "Allgemein",
-      "items": {
-        "phoneId": {
-          "type": "text",
-          "label": "Phone ID(s)",
-          "tooltip": "Mehrere PhoneIDs durch Kommas trennen",
-          "default": ""
-        },
-        "pollInterval": {
-          "type": "number",
-          "label": "Abfrageintervall (Sekunden)",
-          "min": 60,
-          "max": 3600,
-          "default": 600
-        },
-        "windUnit": {
-          "type": "select",
-          "label": "Windgeschwindigkeit anzeigen als",
-          "options": [
-            { "label": "Meter pro Sekunde (m/s)", "value": "m/s" },
-            { "label": "Kilometer pro Stunde (km/h)", "value": "km/h" },
-            { "label": "Beaufort (bft)", "value": "bft" }
-          ],
-          "default": "m/s"
-        }
-      }
-    },
     "info": {
-      "type": "panel",
-      "label": "Information",
-      "items": {
-        "_doc1": {
-          "type": "static-text",
-          "text": "Dieser Adapter liest Temperatur-, Feuchte-, Wind- und Regensensoren von mobile-alerts.eu aus."
-        },
-        "_doc2": {
-          "type": "static-text",
-          "text": "Mehrere Gateways können über Kommas getrennt eingetragen werden."
-        }
-      }
+      "type": "staticText",
+      "label": "Info",
+      "text": "<b>Mobile Alerts Sensor Adapter</b><br>Version 1.0.7<br><br>Dieser Adapter liest Sensorwerte (Temperatur, Luftfeuchtigkeit, Regen, Wind, Bodensensoren) aus dem Online-Portal <a href='https://measurements.mobile-alerts.eu' target='_blank'>mobile-alerts.eu</a> aus."
+    },
+    "divider1": {
+      "type": "divider"
+    },
+    "phoneId": {
+      "type": "text",
+      "label": "Phone ID(s)",
+      "tooltip": "Eine oder mehrere PhoneIDs vom Mobile Alerts Konto, getrennt durch Kommas.",
+      "default": "",
+      "placeholder": "",
+      "sm": 6
+    },
+    "pollInterval": {
+      "type": "number",
+      "label": "Abfrageintervall (Sekunden)",
+      "tooltip": "Intervall für das automatische Auslesen der Sensordaten.",
+      "default": 300,
+      "min": 30,
+      "max": 3600,
+      "sm": 3
+    },
+    "divider2": {
+      "type": "divider"
+    },
+    "windUnit": {
+      "type": "select",
+      "label": "Windgeschwindigkeitseinheit",
+      "tooltip": "Einheit für Windgeschwindigkeiten",
+      "options": [
+        { "label": "Meter pro Sekunde (m/s)", "value": "m/s" },
+        { "label": "Kilometer pro Stunde (km/h)", "value": "km/h" },
+        { "label": "Beaufort (Bft)", "value": "bft" }
+      ],
+      "default": "m/s",
+      "sm": 3
+    },
+    "divider3": {
+      "type": "divider"
+    },
+    "note": {
+      "type": "staticText",
+      "label": "Hinweis",
+      "text": "Der Adapter liest die Sensordaten direkt von der Mobile Alerts Website aus. Stellen Sie sicher, dass Ihre Sensoren über die Mobile Alerts App mit der angegebenen PhoneID verbunden sind."
     }
   }
 }
