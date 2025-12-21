@@ -4,179 +4,183 @@ const utils = require('@iobroker/adapter-core');
 const axios = require('axios');
 const cheerio = require('cheerio');
 
-function num(v) {
-    return parseFloat(String(v).replace(',', '.'));
-}
-
-// ------------------------------------------------------
-// CLEAN FUNCTION – erzeugt 100% gültige ioBroker IDs
-// ------------------------------------------------------
-function cleanId(str) {
-    if (!str) return '';
-
-    return String(str)
-        .trim()
-        .replace(/<\/?[^>]+(>|$)/g, '')       // HTML entfernen
-        .replace(/[^\w\d_-]+/g, '_')          // ungültige Zeichen ersetzen
-        .replace(/_+/g, '_')                  // doppelte "_" entfernen
-        .replace(/^_+|_+$/g, '')              // "_" am Anfang/Ende entfernen
-        .replace(/\.$/, '')                   // Punkt am Ende entfernen
-        .slice(0, 50);                        // maximale Länge
-}
-
 class MobileAlerts extends utils.Adapter {
+  constructor(options) {
+    super({
+      ...options,
+      name: 'mobile-alerts',
+    });
+    this.on('ready', this.onReady.bind(this));
+  }
 
-    constructor(options) {
-        super({
-            ...options,
-            name: 'mobile-alerts',
+  async onReady() {
+    const phoneIds = (this.config.phoneId || '').split(',').map(p => p.trim()).filter(Boolean);
+    const pollInterval = this.config.pollInterval || 300;
+    this.windUnit = this.config.windUnit || 'm/s';
+
+    if (!phoneIds.length) {
+      this.log.error('Keine PhoneID angegeben!');
+      return;
+    }
+
+    for (const id of phoneIds) await this.fetchData(id);
+
+    this.pollTimer = setInterval(() => {
+      phoneIds.forEach(id => this.fetchData(id));
+    }, pollInterval * 1000);
+  }
+
+  async fetchData(phoneId) {
+    try {
+      const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId=${phoneId}`;
+      const res = await axios.get(url, { timeout: 15000 });
+      const html = res.data;
+      const $ = cheerio.load(html);
+
+      const sensors = [];
+
+      $('div.sensor, table.table').each((i, el) => {
+        const text = $(el).text().trim().replace(/\s+/g, ' ');
+        if (!text) return;
+
+        const nameMatch = text.match(/^(.*?) ID /);
+        const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
+        const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+)/);
+        const id = idMatch ? idMatch[1] : null;
+        const timestamp = timeMatch ? timeMatch[1].trim() : null;
+
+        let battery = 'ok';
+        if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) battery = 'low';
+
+        const name = nameMatch ? nameMatch[1].trim() : `Sensor_${i + 1}`;
+        const data = { id, timestamp, battery };
+
+        const num = x => parseFloat(x.replace(',', '.'));
+
+        const tIn = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
+        const hIn = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
+        const tOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
+        const hOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
+        const tCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
+
+        if (tIn) data.temperature = num(tIn[1]);
+        if (hIn) data.humidity = num(hIn[1]);
+        if (tOut) data.temperature_out = num(tOut[1]);
+        if (hOut) data.humidity_out = num(hOut[1]);
+        if (tCable) data.temperature_cable = num(tCable[1]);
+
+        // =============================
+        // ✔ FIX: Regensensor (neu!)
+        // =============================
+        const rainTotalMatch =
+          text.match(/Gesamt\s+([\d,.-]+)\s*mm/i) ||
+          text.match(/Regen(?:menge)?\s+([\d,.-]+)\s*mm/i);
+
+        if (rainTotalMatch) {
+          data.rain_total = num(rainTotalMatch[1]);
+        }
+        // =============================
+
+        // Wind
+        const windSpeed = text.match(/Wind\s+([\d,.-]+)\s*m\/s/i);
+        const windGust = text.match(/Windböen\s+([\d,.-]+)\s*m\/s/i);
+
+        if (windSpeed) data.wind = this.convertWind(num(windSpeed[1]));
+        if (windGust) data.wind_gust = this.convertWind(num(windGust[1]));
+
+        // Regenrate mm/h
+        const rainRate = text.match(/Rate\s+([\d,.-]+)\s*mm\/h/i);
+        if (rainRate) data.rain_rate = num(rainRate[1]);
+
+        // Bodenfeuchte
+        const wet = text.match(/Bodenfeuchte\s+(nass|trocken|wet|dry)/i);
+        if (wet) data.wet = /nass|wet/i.test(wet[1]) ? 1 : 0;
+
+        sensors.push({ name, ...data });
+      });
+
+      // ******************************************************************
+      // STATES SPEICHERN
+      // ******************************************************************
+
+      const phoneBase = `Phone_${phoneId}`;
+
+      await this.setObjectNotExistsAsync(phoneBase, {
+        type: 'folder',
+        common: { name: `Phone ${phoneId}` },
+        native: {},
+      });
+
+      for (const sensor of sensors) {
+        const sensorBase = `${phoneBase}.${sensor.name.replace(/\s+/g, '_')}`;
+
+        await this.setObjectNotExistsAsync(sensorBase, {
+          type: 'channel',
+          common: { name: sensor.name },
+          native: { phoneId },
         });
 
-        this.on('ready', this.onReady.bind(this));
-        this.on('unload', this.onUnload.bind(this));
-    }
+        for (const [key, val] of Object.entries(sensor)) {
+          if (key === 'name') continue;
 
-    async onReady() {
-        const phoneIds = (this.config.phoneId || '')
-            .split(',')
-            .map(p => p.trim())
-            .filter(Boolean);
+          await this.setObjectNotExistsAsync(`${sensorBase}.${key}`, {
+            type: 'state',
+            common: {
+              name: key,
+              type: typeof val,
+              role: this.mapRole(key),
+              read: true,
+              write: false,
+              unit: this.mapUnit(key),
+            },
+            native: {},
+          });
 
-        const pollInterval = this.config.pollInterval || 300;
-        this.windUnit = this.config.windUnit || 'm/s';
-
-        if (!phoneIds.length) {
-            this.log.error('Keine PhoneID angegeben!');
-            return;
+          await this.setStateAsync(`${sensorBase}.${key}`, { val, ack: true });
         }
+      }
 
-        for (const id of phoneIds) await this.fetchData(id);
+      this.log.info(`Erfolgreich ${sensors.length} Sensor(en) aktualisiert für Phone_${phoneId}.`);
+      await this.setStateAsync('info.connection', { val: true, ack: true });
 
-        this.interval = setInterval(() => {
-            phoneIds.forEach(id => this.fetchData(id));
-        }, pollInterval * 1000);
+    } catch (err) {
+      this.log.error(`Fehler beim Abruf für ${phoneId}: ${err.message}`);
+      await this.setStateAsync('info.connection', { val: false, ack: true });
     }
+  }
 
-    async fetchData(phoneId) {
-        try {
-            const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId=${phoneId}`;
-            const res = await axios.get(url);
-            const $ = cheerio.load(res.data);
+  convertWind(v) {
+    if (this.windUnit === 'km/h') return +(v * 3.6).toFixed(1);
+    if (this.windUnit === 'bft') return +Math.round(Math.pow(v / 0.836, 2 / 3));
+    return v;
+  }
 
-            const sensors = [];
+  mapRole(k) {
+    if (k.includes('temperature')) return 'value.temperature';
+    if (k.includes('humidity')) return 'value.humidity';
+    if (k.includes('rain')) return 'value.rain';
+    if (k.includes('wind')) return 'value.wind';
+    if (k.includes('battery')) return 'indicator.battery';
+    if (k.includes('timestamp')) return 'value.time';
+    if (k === 'wet') return 'sensor.water';
+    return 'state';
+  }
 
-            $('.panel').each((index, el) => {
-
-                let rawName = $(el).find('.panel-heading').text().trim();
-                let name = cleanId(rawName) || `Sensor_${index + 1}`;
-
-                const sensor = {
-                    name,
-                    values: {}
-                };
-
-                $(el).find('.table tr').each((_, row) => {
-                    const rawKey = $(row).find('td').eq(0).text().trim().toLowerCase();
-                    const key = cleanId(rawKey.replace(/\s+/g, '_'));
-
-                    let val = $(row).find('td').eq(1).text().trim();
-
-                    if (!key || !val) return;
-
-                    const m = val.match(/([-+]?[0-9]*[.,]?[0-9]+)/);
-
-                    if (m) val = num(m[1]);
-
-                    if (key.includes('wind') && typeof val === 'number') {
-                        val = this.convertWind(val);
-                    }
-
-                    sensor.values[key] = val;
-                });
-
-                sensors.push(sensor);
-            });
-
-            for (const sensor of sensors) {
-                let sensorBase = cleanId(`Phone_${phoneId}_${sensor.name}`);
-
-                await this.setObjectNotExistsAsync(sensorBase, {
-                    type: 'device',
-                    common: { name: sensor.name },
-                    native: {}
-                });
-
-                for (const [k, v] of Object.entries(sensor.values)) {
-
-                    const role = this.mapRole(k);
-                    const unit = this.mapUnit(k);
-
-                    const id = cleanId(`${sensorBase}_${k}`);
-
-                    await this.setObjectNotExistsAsync(id, {
-                        type: 'state',
-                        common: {
-                            name: k,
-                            type: typeof v === 'number' ? 'number' : 'string',
-                            unit,
-                            role,
-                            read: true,
-                            write: false
-                        },
-                        native: {}
-                    });
-
-                    await this.setStateAsync(id, { val: v, ack: true });
-                }
-            }
-
-            await this.setStateAsync('info.connection', { val: true, ack: true });
-
-        } catch (e) {
-            this.log.error(`Fehler beim Abruf für ${phoneId}: ${e}`);
-            await this.setStateAsync('info.connection', { val: false, ack: true });
-        }
+  mapUnit(k) {
+    if (k.includes('temperature')) return '°C';
+    if (k.includes('humidity')) return '%';
+    if (k.includes('rain')) return 'mm';
+    if (k.includes('wind')) {
+      if (this.windUnit === 'km/h') return 'km/h';
+      if (this.windUnit === 'bft') return 'Bft';
+      return 'm/s';
     }
-
-    convertWind(v) {
-        if (this.windUnit === 'km/h') return +(v * 3.6).toFixed(1);
-        if (this.windUnit === 'bft') return +Math.round(Math.pow(v / 0.836, 2 / 3));
-        return v;
-    }
-
-    mapRole(k) {
-        if (k.includes('temperature')) return 'value.temperature';
-        if (k.includes('humidity')) return 'value.humidity';
-        if (k.includes('rain')) return 'value.rain';
-        if (k.includes('wind')) return 'value.wind';
-        if (k.includes('battery')) return 'indicator.battery';
-        return 'state';
-    }
-
-    mapUnit(k) {
-        if (k.includes('temperature')) return '°C';
-        if (k.includes('humidity')) return '%';
-        if (k.includes('rain')) return 'mm';
-        if (k.includes('wind')) {
-            if (this.windUnit === 'km/h') return 'km/h';
-            if (this.windUnit === 'bft') return 'Bft';
-            return 'm/s';
-        }
-        return '';
-    }
-
-    onUnload(callback) {
-        try {
-            if (this.interval) clearInterval(this.interval);
-            callback();
-        } catch (e) {
-            callback();
-        }
-    }
+    return '';
+  }
 }
 
 if (require.main !== module) {
-    module.exports = (options) => new MobileAlerts(options);
+  module.exports = (options) => new MobileAlerts(options);
 } else {
-    new MobileAlerts();
+  new MobileAlerts();
 }
