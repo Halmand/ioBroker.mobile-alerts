@@ -1,169 +1,219 @@
 'use strict';
 
+/*
+ *  Mobile Alerts ioBroker Adapter
+ *  Version 1.1.2
+ *
+ *  Features:
+ *  - Temperatur Innen/Außen
+ *  - Luftfeuchte
+ *  - Historische Feuchte (3H, 24H, 7D, 30D)
+ *  - Kabelsensor Temperatur
+ *  - Bodensensor (trocken / feucht)
+ *  - Windrichtung, Windgeschwindigkeit, Böe
+ *  - Regen
+ *  - Batterie
+ *  - Timestamp
+ *  - Multi-PhoneID Unterstützung
+ */
+
 const utils = require('@iobroker/adapter-core');
 const axios = require('axios');
 const cheerio = require('cheerio');
 
 class MobileAlerts extends utils.Adapter {
-  constructor(options) {
-    super({
-      ...options,
-      name: 'mobile-alerts',
-    });
-    this.on('ready', this.onReady.bind(this));
-  }
-
-  async onReady() {
-    const phoneIds = (this.config.phoneId || '').split(',').map(p => p.trim()).filter(Boolean);
-    const pollInterval = this.config.pollInterval || 300;
-    this.windUnit = this.config.windUnit || 'm/s';
-
-    if (!phoneIds.length) {
-      this.log.error('Keine PhoneID angegeben!');
-      return;
-    }
-
-    for (const id of phoneIds) await this.fetchData(id);
-
-    this.pollTimer = setInterval(() => {
-      phoneIds.forEach(id => this.fetchData(id));
-    }, pollInterval * 1000);
-  }
-
-  async fetchData(phoneId) {
-    try {
-      const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId=${phoneId}`;
-      const res = await axios.get(url, { timeout: 15000 });
-      const html = res.data;
-      const $ = cheerio.load(html);
-
-      const sensors = [];
-
-      $('div.sensor, table.table').each((i, el) => {
-        const text = $(el).text().trim().replace(/\s+/g, ' ');
-        if (!text) return;
-
-        const nameMatch = text.match(/^(.*?) ID /);
-        const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
-        const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+)/);
-        const id = idMatch ? idMatch[1] : null;
-        const timestamp = timeMatch ? timeMatch[1].trim() : null;
-
-        let battery = 'ok';
-        if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) battery = 'low';
-
-        const name = nameMatch ? nameMatch[1].trim() : `Sensor_${i + 1}`;
-        const data = { id, timestamp, battery };
-
-        // 🌡️ Temperatur & Feuchte
-        const tempIn = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
-        const humIn = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
-        const tempOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
-        const humOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
-        const tempCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
-
-        if (tempIn) data.temperature = parseFloat(tempIn[1].replace(',', '.'));
-        if (humIn) data.humidity = parseFloat(humIn[1].replace(',', '.'));
-        if (tempOut) data.temperature_out = parseFloat(tempOut[1].replace(',', '.'));
-        if (humOut) data.humidity_out = parseFloat(humOut[1].replace(',', '.'));
-        if (tempCable) data.temperature_cable = parseFloat(tempCable[1].replace(',', '.'));
-
-        // 💧 Feuchtesensor (trocken/feucht)
-        const wetMatch = text.match(/(trocken|feucht)/i);
-        if (wetMatch) data.wet = wetMatch[1].toLowerCase() === 'feucht';
-
-        // 🌧️ Regen
-        const rainTotal = text.match(/Gesamt\s+([\d,.-]+)\s*mm/i);
-        const rainRate = text.match(/Rate\s+([\d,.-]+)\s*mm\/h/i);
-        if (rainTotal) data.rain_total = parseFloat(rainTotal[1].replace(',', '.'));
-        if (rainRate) data.rain_rate = parseFloat(rainRate[1].replace(',', '.'));
-
-        // 🌬️ Wind
-        const windSpeed = text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i);
-        const windGust = text.match(/Böe\s+([\d,.-]+)\s*m\/s/i);
-        const windDir = text.match(/Windrichtung\s+([A-Za-zäöüß]+|\d{1,3}°)/i);
-        if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
-        if (windGust) data.wind_gust = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
-        if (windDir) data.wind_dir = windDir[1];
-
-        sensors.push({ name, ...data });
-      });
-
-      if (!sensors.length) {
-        this.log.warn(`Keine Sensoren gefunden für ${phoneId}`);
-        return;
-      }
-
-      // 💾 Objekte unter PhoneID > Sensorname
-      for (const sensor of sensors) {
-        const base = `${phoneId}.${sensor.name.replace(/\s+/g, '_')}`;
-
-        await this.setObjectNotExistsAsync(base, {
-          type: 'channel',
-          common: { name: sensor.name },
-          native: { phoneId },
+    constructor(options = {}) {
+        super({
+            ...options,
+            name: 'mobile-alerts'
         });
 
-        for (const [key, val] of Object.entries(sensor)) {
-          if (['name'].includes(key)) continue;
+        this.interval = null;
+        this.pollInterval = 300;
+        this.phoneIds = [];
+    }
 
-          await this.setObjectNotExistsAsync(`${base}.${key}`, {
-            type: 'state',
-            common: {
-              name: key,
-              type: typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : 'string',
-              role: this.mapRole(key),
-              read: true,
-              write: false,
-              unit: this.mapUnit(key),
-            },
-            native: {},
-          });
+    async onReady() {
+        try {
+            // Mehrere IDs durch Komma getrennt
+            this.phoneIds = (this.config.phoneId || '')
+                .split(',')
+                .map(a => a.trim())
+                .filter(a => a.length > 0);
 
-          await this.setStateAsync(`${base}.${key}`, { val, ack: true });
+            this.pollInterval = parseInt(this.config.pollInterval || 300, 10);
+
+            if (this.phoneIds.length === 0) {
+                this.log.warn('Keine PhoneIDs eingetragen!');
+                return;
+            }
+
+            await this.fetchAll();
+
+            this.interval = setInterval(() => this.fetchAll(), this.pollInterval * 1000);
+
+        } catch (e) {
+            this.log.error('Fehler beim Start: ' + e);
         }
-      }
-
-      this.log.info(`Erfolgreich ${sensors.length} Sensor(en) aktualisiert für ${phoneId}.`);
-      await this.setStateAsync('info.connection', { val: true, ack: true });
-    } catch (err) {
-      this.log.error(`Fehler beim Abruf für ${phoneId}: ${err.message}`);
-      await this.setStateAsync('info.connection', { val: false, ack: true });
     }
-  }
 
-  convertWind(v) {
-    if (this.windUnit === 'km/h') return +(v * 3.6).toFixed(1);
-    if (this.windUnit === 'bft') return +Math.round(Math.pow(v / 0.836, 2 / 3));
-    return v;
-  }
-
-  mapRole(k) {
-    if (k.includes('temperature')) return 'value.temperature';
-    if (k.includes('humidity')) return 'value.humidity';
-    if (k.includes('rain')) return 'value.rain';
-    if (k.includes('wind')) return 'value.wind';
-    if (k.includes('battery')) return 'indicator.battery';
-    if (k.includes('timestamp')) return 'value.time';
-    if (k === 'wet') return 'sensor.water';
-    return 'state';
-  }
-
-  mapUnit(k) {
-    if (k.includes('temperature')) return '°C';
-    if (k.includes('humidity')) return '%';
-    if (k.includes('rain')) return 'mm';
-    if (k.includes('wind')) {
-      if (this.windUnit === 'km/h') return 'km/h';
-      if (this.windUnit === 'bft') return 'Bft';
-      return 'm/s';
+    async fetchAll() {
+        for (const phoneId of this.phoneIds) {
+            try {
+                await this.fetchData(phoneId);
+            } catch (e) {
+                this.log.error(`Fehler beim Abruf PhoneID ${phoneId}: ${e}`);
+            }
+        }
     }
-    return '';
-  }
+
+    async fetchData(phoneId) {
+        const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId=${phoneId}`;
+
+        this.log.debug(`Abruf: ${url}`);
+
+        const response = await axios.get(url, {
+            timeout: 15000,
+            headers: {
+                'User-Agent':
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+                'Accept-Language': 'de-DE,de;q=0.8,en;q=0.7'
+            }
+        });
+
+        const html = response.data;
+        const $ = cheerio.load(html);
+
+        let sensorCount = 0;
+
+        $('div.panel').each((i, el) => {
+            const panelText = $(el).text().replace(/\s+/g, ' ').trim();
+
+            if (!panelText) return;
+
+            const nameMatch = panelText.match(/^(.*?) ID/i);
+            const idMatch = panelText.match(/ID\s*([A-F0-9]+)/i);
+            const timeMatch = panelText.match(/(\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2})/);
+
+            const sensorName = nameMatch ? nameMatch[1].trim() : 'Sensor';
+            const sensorId = idMatch ? idMatch[1] : 'Unknown';
+            const timestamp = timeMatch ? timeMatch[1] : null;
+
+            const base = `Phone_${phoneId}.${sensorName}`;
+
+            this.extendObjectAsync(base, {
+                type: 'channel',
+                common: { name: sensorName },
+                native: { id: sensorId }
+            });
+
+            const write = async (name, value, type = 'number', unit = '') => {
+                if (value === null || value === undefined || value === 'NaN' || Number.isNaN(value)) return;
+                await this.setObjectNotExistsAsync(`${base}.${name}`, {
+                    type: 'state',
+                    common: {
+                        name,
+                        type,
+                        role: 'value',
+                        read: true,
+                        write: false,
+                        unit
+                    },
+                    native: {}
+                });
+                await this.setStateAsync(`${base}.${name}`, { val: value, ack: true });
+            };
+
+            // Temperatur Innen/Außen
+            const tIn = extract(panelText, /Temperatur(?: Innen)?\s+([\d,.-]+)/);
+            const tOut = extract(panelText, /Temperatur Außen\s+([\d,.-]+)/);
+
+            // Luftfeuchte Innen/Außen
+            const hIn = extract(panelText, /Luftfeuchte(?: Innen)?\s+([\d,.-]+)/);
+            const hOut = extract(panelText, /Luftfeuchte Außen\s+([\d,.-]+)/);
+
+            // Kabelsensor Temperatur
+            const tCable = extract(panelText, /Temperatur Kabelsensor\s+([\d,.-]+)/);
+
+            // Bodensensor (trocken / feucht)
+            const soil =
+                /trocken/i.test(panelText) ? 'dry' :
+                /feucht/i.test(panelText) ? 'wet' :
+                null;
+
+            // Historische Feuchte
+            const hum3h = extract(panelText, /Durchschn\.\s*Luftf\.\s*3H\s+([\d,.-]+)/);
+            const hum24h = extract(panelText, /Durchschn\.\s*Luftf\.\s*24H\s+([\d,.-]+)/);
+            const hum7d = extract(panelText, /Durchschn\.\s*Luftf\.\s*7D\s+([\d,.-]+)/);
+            const hum30d = extract(panelText, /Durchschn\.\s*Luftf\.\s*30D\s+([\d,.-]+)/);
+
+            // Windrichtung, Windgeschwindigkeit, Böe
+            const windSpeed = extract(panelText, /Windgeschwindigkeit\s+([\d,.,]+)/);
+            const windGust = extract(panelText, /Böe\s+([\d,.,]+)/);
+            const windDir = extract(panelText, /Windrichtung\s+([\d]+)\s*°/);
+
+            // Regen
+            const rain = extract(panelText, /Regen(?:menge)?\s+([\d,.-]+)/);
+
+            // Batterie
+            const battery =
+                /low|schwach|leer/i.test(panelText) ? 0 :
+                /ok|gut/i.test(panelText) ? 1 :
+                null;
+
+            // Speichern
+            await write('temperature', tIn ?? tOut, 'number', '°C');
+            await write('humidity', hIn ?? hOut, 'number', '%');
+            await write('temperature_cable', tCable, 'number', '°C');
+
+            if (soil) {
+                await write('soil_status', soil, 'string');
+            }
+
+            await write('hum3h', hum3h, 'number', '%');
+            await write('hum24h', hum24h, 'number', '%');
+            await write('hum7d', hum7d, 'number', '%');
+            await write('hum30d', hum30d, 'number', '%');
+
+            await write('wind_speed', windSpeed, 'number', 'm/s');
+            await write('wind_gust', windGust, 'number', 'm/s');
+            await write('wind_dir', windDir, 'number', '°');
+
+            await write('rain', rain, 'number', 'mm');
+
+            if (battery !== null) {
+                await write('battery', battery, 'number');
+            }
+
+            if (timestamp) {
+                await write('timestamp', timestamp, 'string');
+            }
+
+            sensorCount++;
+        });
+
+        this.log.info(`PhoneID ${phoneId}: ${sensorCount} Sensoren aktualisiert.`);
+    }
+
+    onUnload(callback) {
+        try {
+            if (this.interval) clearInterval(this.interval);
+            callback();
+        } catch (e) {
+            callback();
+        }
+    }
+}
+
+/** Hilfsfunktion für Zahlenextraktion */
+function extract(text, regex) {
+    const match = text.match(regex);
+    if (!match || match.length < 2) return null;
+    return parseFloat(match[1].replace(',', '.'));
 }
 
 if (require.main !== module) {
-  module.exports = (options) => new MobileAlerts(options);
+    module.exports = (options) => new MobileAlerts(options);
 } else {
-  new MobileAlerts();
+    new MobileAlerts();
 }
