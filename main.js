@@ -46,52 +46,62 @@ class MobileAlerts extends utils.Adapter {
         const nameMatch = text.match(/ID\s+([A-F0-9]+)/i);
         const name = $(el).find('h3, .sensor-name').first().text().trim() || `Sensor_${i}`;
         const id = nameMatch ? nameMatch[1] : `unknown_${i}`;
-
         const data = { name, id };
 
-        // Zeitstempel
+        // Zeitpunkt
         const ts = text.match(/Zeitpunkt\s+([\d:. ]+)/i);
         if (ts) data.timestamp = ts[1].trim();
 
-        // Temperatur innen/außen
+        // Temperatur
         const tIn = text.match(/Temperatur\s+([\d,.-]+)\s*C/i);
         if (tIn) data.temperature = parseFloat(tIn[1].replace(',', '.'));
 
         // Luftfeuchte
-        const hIn = text.match(/Luftfeuchte\s+([\d,.-]+)\s*%/i);
-        if (hIn) data.humidity = parseFloat(hIn[1].replace(',', '.'));
+        const hum = text.match(/Luftfeuchte\s+(\d+)\s*%/i);
+        if (hum) data.humidity = parseInt(hum[1]);
 
-        // ✔ WIND FIX
-        const windSpeed =
-          text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i) ||
-          text.match(/Wind\s+([\d,.-]+)\s*m\/s/i);
+        // Durchschnitt Luftfeuchte 3h
+        const h3 = text.match(/Durchschn\. Luftf\. 3H\s+(\d+)%/i);
+        if (h3) data.humidity_avg_3h = parseInt(h3[1]);
 
-        const windGust =
-          text.match(/Böe\s+([\d,.-]+)\s*m\/s/i) ||
-          text.match(/Windböe[n]?\s+([\d,.-]+)\s*m\/s/i);
+        // Durchschnitt Luftfeuchte 24h
+        const h24 = text.match(/Durchschn\. Luftf\. 24H\s+(\d+)%/i);
+        if (h24) data.humidity_avg_24h = parseInt(h24[1]);
 
-        const windDir = text.match(/Windrichtung\s+([A-Za-zäöüÄÖÜ ]+)/i);
+        // Durchschnitt Luftfeuchte 7d
+        const h7 = text.match(/Durchschn\. Luftf\. 7D\s+(\d+)%/i);
+        if (h7) data.humidity_avg_7d = parseInt(h7[1]);
 
-        if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
-        if (windGust) data.wind_gust = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
-        if (windDir) data.wind_dir = windDir[1].trim();
+        // Durchschnitt Luftfeuchte 30d
+        const h30 = text.match(/Durchschn\. Luftf\. 30D\s+(\d+)%/i);
+        if (h30) data.humidity_avg_30d = parseInt(h30[1]);
 
-        // ✔ REGEN FIX
+        // Regen
         const rain = text.match(/Regen\s+([\d,.]+)\s*mm/i);
         if (rain) data.rain = parseFloat(rain[1].replace(',', '.'));
+
+        // Wind
+        const ws = text.match(/Windgeschwindigkeit\s+([\d,.]+)\s*m\/s/i);
+        if (ws) data.wind = this.convertWind(parseFloat(ws[1].replace(',', '.')));
+
+        const gust = text.match(/Böe\s+([\d,.]+)\s*m\/s/i);
+        if (gust) data.wind_gust = this.convertWind(parseFloat(gust[1].replace(',', '.')));
+
+        const wdir = text.match(/Windrichtung\s+([A-Za-zäöüÄÖÜ]+)/i);
+        if (wdir) data.wind_direction = wdir[1];
+
+        // ✔ KONTAKTSENSOR
+        const door = text.match(/Kontaktsensor\s+(Geschlossen|Offen)/i);
+        if (door) {
+          data.contact = door[1].toLowerCase() === 'geschlossen' ? false : true;
+          data.contact_text = door[1];
+        }
 
         sensors.push(data);
       });
 
-      const phoneBase = `Phone_${phoneId}`;
-      await this.setObjectNotExistsAsync(phoneBase, {
-        type: 'channel',
-        common: { name: phoneBase },
-        native: {},
-      });
-
       for (const sensor of sensors) {
-        const sensorBase = `${phoneBase}.${sensor.name.replace(/\s+/g, '_')}`;
+        const sensorBase = `sensors.${sensor.id}_${sensor.name.replace(/\s+/g, '_')}`;
 
         await this.setObjectNotExistsAsync(sensorBase, {
           type: 'channel',
@@ -141,6 +151,8 @@ class MobileAlerts extends utils.Adapter {
     if (k.includes('wind')) return 'value.wind';
     if (k.includes('battery')) return 'indicator.battery';
     if (k.includes('timestamp')) return 'value.time';
+    if (k === 'contact') return 'sensor.door';
+    if (k === 'contact_text') return 'text';
     if (k === 'wet') return 'sensor.water';
     return 'state';
   }
