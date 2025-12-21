@@ -52,8 +52,20 @@ Mitentwickelt von: Code GPT (PulsR AI)
 Lizenz: MIT License
 
 ---
+🧾 CHANGELOG 1.0.8
 
-🧾 Changelog
+🧭 Winddaten korrigiert
+Windrichtung wird jetzt korrekt als Grad + Text erkannt (225° Südwest)
+Verhindert, dass die Geschwindigkeit fälschlich im Feld wind_dir landet
+💨 Kompatibel mit allen Wetterstationen (MA10006, MA10660, MA10665 usw.)
+💧 Wassersensor-Erkennung weiterhin aktiv
+🧭 Wassersensor-Erkennung	erkennt automatisch “trocken” / “feucht” und legt den booleschen Wert wet an
+🌡️ Unterscheidung Kabelsensor	wenn keine Feuchtigkeitsbegriffe vorkommen → temperature_cable
+🪫 Batterieprüfung verbessert	erkennt auch englische Meldungen
+🧩 Voll kompatibel mit bisherigen Objekten	keine Brüche in ioBroker
+⚙️ Stabiler Parser	robust gegen neue HTML-Strukturen
+🔋 Parser robuster bei HTML-Strukturänderungen
+
 ## **1.0.7 (2025-11-29)**
 -kleiner Bugfix in der jsonConfig.json
 
