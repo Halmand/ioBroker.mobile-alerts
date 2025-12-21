@@ -58,63 +58,46 @@ class MobileAlerts extends utils.Adapter {
                 const hum = t.match(/Luftfeuchte\s+(\d+)\s*%/i);
                 if (hum) data.humidity = parseInt(hum[1]);
 
+                // Durchschnittswerte Luftfeuchte (NEU – EINZIGE ÄNDERUNG)
+                const hum3 = t.match(/Durchschn\. Luftf\. 3H\s+(\d+)%/i);
+                if (hum3) data.humidity_avg_3h = parseInt(hum3[1]);
+
+                const hum24 = t.match(/Durchschn\. Luftf\. 24H\s+(\d+)%/i);
+                if (hum24) data.humidity_avg_24h = parseInt(hum24[1]);
+
+                const hum7 = t.match(/Durchschn\. Luftf\. 7D\s+(\d+)%/i);
+                if (hum7) data.humidity_avg_7d = parseInt(hum7[1]);
+
+                const hum30 = t.match(/Durchschn\. Luftf\. 30D\s+(\d+)%/i);
+                if (hum30) data.humidity_avg_30d = parseInt(hum30[1]);
+
                 // Regen
-                const rain = t.match(/Regen\s+([\d,.-]+)\s*mm/i);
+                const rain = t.match(/Regenmenge\s+([\d,.-]+)\s*mm/i);
                 if (rain) data.rain = parseFloat(rain[1].replace(',', '.'));
 
                 // Wind
-                const wind = t.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i);
+                const wind = t.match(/Wind\s+([\d,.-]+)\s*m\/s/i);
                 if (wind) data.wind = this.convertWind(parseFloat(wind[1].replace(',', '.')));
 
-                const gust = t.match(/Böe\s+([\d,.-]+)\s*m\/s/i);
-                if (gust) data.gust = this.convertWind(parseFloat(gust[1].replace(',', '.')));
-
-                // Windrichtung
-                const dir = t.match(/Windrichtung\s+([A-Za-z]+)/i);
-                if (dir) data.wind_direction = dir[1];
-
                 // Batterie
-                const bat = t.match(/Batterie\s+(\d+)%/i);
-                if (bat) data.battery = parseInt(bat[1]);
+                const batt = t.match(/Batterie\s+(\d+)\s*%/i);
+                if (batt) data.battery = parseInt(batt[1]);
 
-                // WET SENSOR
-                const wet = t.match(/Bodenfeuchte\s+(Nass|Trocken)/i);
-                if (wet) data.wet = wet[1] === 'Nass';
-
-                // ✔ KONTAKTSENSOR (NEU)
-                const door = t.match(/Kontaktsensor\s+(Geschlossen|Offen)/i);
-                if (door) {
-                    data.contact = door[1] === 'Offen';
-                    data.contact_text = door[1];
+                // Kontaktsensor
+                if (/offen/i.test(t)) {
+                    data.contact = true;
+                    data.contact_text = 'Offen';
+                } else if (/geschlossen/i.test(t)) {
+                    data.contact = false;
+                    data.contact_text = 'Geschlossen';
                 }
 
                 sensors.push(data);
             });
 
-            if (!sensors.length) {
-                this.log.warn(`Keine Sensoren gefunden für ${phoneId}`);
-                return;
-            }
-
-            // -----------------------------------------------
-            // ❗ Deine Struktur: mobile-alerts.0.Phone_<ID>.<SensorName>.<Wert>
-            // -----------------------------------------------
-            const phoneBase = `Phone_${phoneId}`;
-
-            await this.setObjectNotExistsAsync(phoneBase, {
-                type: 'folder',
-                common: { name: `Phone ${phoneId}` },
-                native: {},
-            });
-
+            // Daten in States schreiben
             for (const sensor of sensors) {
-                const sensorBase = `${phoneBase}.${sensor.name.replace(/\s+/g, '_')}`;
-
-                await this.setObjectNotExistsAsync(sensorBase, {
-                    type: 'channel',
-                    common: { name: sensor.name },
-                    native: { phoneId },
-                });
+                const sensorBase = `Phone_${phoneId}.${sensor.name}`;
 
                 for (const [key, val] of Object.entries(sensor)) {
                     if (key === 'name') continue;
@@ -161,7 +144,6 @@ class MobileAlerts extends utils.Adapter {
         if (k.includes('timestamp')) return 'value.time';
         if (k === 'contact') return 'sensor.door';
         if (k === 'contact_text') return 'text';
-        if (k === 'wet') return 'sensor.water';
         return 'state';
     }
 
