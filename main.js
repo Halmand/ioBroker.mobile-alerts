@@ -1,22 +1,5 @@
 'use strict';
 
-/*
- *  Mobile Alerts ioBroker Adapter
- *  Version 1.1.2
- *
- *  Features:
- *  - Temperatur Innen/Außen
- *  - Luftfeuchte
- *  - Historische Feuchte (3H, 24H, 7D, 30D)
- *  - Kabelsensor Temperatur
- *  - Bodensensor (trocken / feucht)
- *  - Windrichtung, Windgeschwindigkeit, Böe
- *  - Regen
- *  - Batterie
- *  - Timestamp
- *  - Multi-PhoneID Unterstützung
- */
-
 const utils = require('@iobroker/adapter-core');
 const axios = require('axios');
 const cheerio = require('cheerio');
