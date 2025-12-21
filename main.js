@@ -1,261 +1,290 @@
 'use strict';
+
 const utils = require('@iobroker/adapter-core');
 const axios = require('axios');
 const cheerio = require('cheerio');
+
 class MobileAlerts extends utils.Adapter {
-    constructor(options) {
+    constructor(options = {}) {
         super({
             ...options,
             name: 'mobile-alerts',
         });
+
+        this.pollTimer = null;
         this.on('ready', this.onReady.bind(this));
         this.on('unload', this.onUnload.bind(this));
-    // default, kann via config überschrieben werden
-    this.windUnit = 'm/s';
-    this.pollTimer = null;
-}
-
-async onReady() {
-    this.windUnit = this.config.windUnit || this.windUnit;
-
-    const phoneIds = (this.config.phoneId || '').split(',').map(p => p.trim()).filter(Boolean);
-    let pollInterval = Number(this.config.pollInterval || 300);
-    if (!Number.isFinite(pollInterval) || pollInterval < 5) pollInterval = 300; // mind. 5s, default 300s
-
-    if (!phoneIds.length) {
-        this.log.warn('Keine PhoneID angegeben — Adapter läuft, warte auf Konfiguration.');
-        // Adapter weiterlaufen lassen, aber nichts pollen
-        return;
     }
 
-    // erster Lauf synchron für alle PhoneIDs
-    for (const id of phoneIds) {
-        await this.fetchData(id);
+    async onReady() {
+        this.log.info('Adapter ready');
+        // Konfiguration aus Adapter-Einstellungen
+        this.phoneIds = (this.config.phoneId || '').split(',').map(p => p.trim()).filter(Boolean);
+        this.pollInterval = Number(this.config.pollInterval || 300); // in Sekunden
+        if (!Number.isFinite(this.pollInterval) || this.pollInterval < 5) this.pollInterval = 300;
+
+        if (!this.phoneIds.length) {
+            this.log.warn('Keine Phone-ID(s) in der Konfiguration gefunden. Adapter läuft, aber pollt nichts.');
+            await this.setStateAsync('info.connection', { val: false, ack: true });
+            return;
+        }
+
+        // Start initial fetch + Polling
+        await this.fetchAllPhones();
+        this.startPolling();
     }
 
-    // regelmäßiges Polling
-    this.pollTimer = setInterval(() => {
-        phoneIds.forEach(id => this.fetchData(id));
-    }, pollInterval * 1000);
-}
-
-async onUnload(callback) {
-    try {
+    startPolling() {
         if (this.pollTimer) {
             clearInterval(this.pollTimer);
             this.pollTimer = null;
         }
-        callback && callback();
-    } catch (e) {
-        callback && callback();
+        this.log.info(`Starte Polling alle ${this.pollInterval} Sekunden für ${this.phoneIds.length} Phone(s).`);
+        this.pollTimer = setInterval(() => {
+            this.fetchAllPhones().catch(err => {
+                this.log.error(`Polling-Fehler: ${err && err.message ? err.message : JSON.stringify(err)}`);
+            });
+        }, this.pollInterval * 1000);
     }
-}
 
-// helper: sichere Objekt-ID (minimal invasiv)
-// wir machen nur aus dem Sensor-Namen eine id-kompatible Zeichenfolge,
-// belassen aber sichtbaren Namen (common.name) unverändert.
-sanitizeId(s) {
-    if (!s) return '';
-    // Ersetze Umlaute, Sonderzeichen, mehrere Unterstriche -> kompakt
-    const map = { 'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue', 'ß': 'ss' };
-    let r = s.replace(/[äöüÄÖÜß]/g, m => map[m] || m);
-    r = r.replace(/[^a-zA-Z0-9-_ ]+/g, '_'); // alles nicht alphanumerisch -> _
-    r = r.replace(/\s+/g, '_'); // Leer zu _
-    r = r.replace(/_+/g, '_'); // mehrere _ -> _
-    r = r.replace(/^_|_ $ /g, ''); // führende/trailing _
-    if (!r) r = 'sensor';
-    return r;
-}
-
-// convert wind depending on config
-convertWind(v) {
-    if (this.windUnit === 'km/h') return +(v * 3.6).toFixed(1);
-    if (this.windUnit === 'bft') return +Math.round(Math.pow(v / 0.836, 2 / 3));
-    return v;
-}
-
-mapRole(k) {
-    if (k.includes('temperature')) return 'value.temperature';
-    if (k.includes('humidity')) return 'value.humidity';
-    if (k.includes('rain')) return 'value.rain';
-    if (k.includes('wind')) return 'value.wind';
-    if (k.includes('battery')) return 'indicator.battery';
-    if (k.includes('timestamp')) return 'value.time';
-    if (k === 'contact') return 'sensor.door';
-    if (k === 'contact_text') return 'text';
-    if (k === 'wet') return 'sensor.water';
-    return 'state';
-}
-
-mapUnit(k) {
-    if (k.includes('temperature')) return '°C';
-    if (k.includes('humidity')) return '%';
-    if (k.includes('rain')) return 'mm';
-    if (k.includes('wind')) {
-        if (this.windUnit === 'km/h') return 'km/h';
-        if (this.windUnit === 'bft') return 'Bft';
-        return 'm/s';
+    async fetchAllPhones() {
+        await this.setStateAsync('info.connection', { val: true, ack: true });
+        for (const phoneId of this.phoneIds) {
+            try {
+                await this.fetchPhone(phoneId);
+            } catch (err) {
+                this.log.error(`Fehler bei fetchPhone(${phoneId}): ${err && err.message ? err.message : JSON.stringify(err)}`);
+                await this.setStateAsync('info.connection', { val: false, ack: true });
+            }
+        }
     }
-    return '';
-}
 
-// Hauptfunktion: Daten abholen und States anlegen/setzen
-async fetchData(phoneId) {
-    try {
-        const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId= $ {phoneId}`;
-        const res = await axios.get(url, { timeout: 15000 });
-        const html = res.data;
-        const  $  = cheerio.load(html);
+    async fetchPhone(phoneId) {
+        const url = this.buildUrlForPhone(phoneId);
+        this.log.debug(`Rufe URL ab für Phone_${phoneId}: ${url}`);
 
+        let html;
+        try {
+            const resp = await axios.get(url, { timeout: 20000 });
+            html = resp.data;
+        } catch (err) {
+            this.log.error(`HTTP-Fehler beim Abrufen von Phone_${phoneId}: ${err.message}`);
+            throw err;
+        }
+
+        // Parser: anpassen falls Seite anders strukturiert ist
+        const sensors = this.parseHtmlForSensors(html, phoneId);
+
+        // DEBUG: Zeige wie viele Sensoren und ein Beispiel
+        this.log.debug(`DEBUG mobile-alerts: für Phone_${phoneId} sensors parsed: ${sensors.length}`);
+        if (sensors.length > 0) {
+            this.log.debug(`DEBUG mobile-alerts: first sensor sample: ${JSON.stringify(sensors[0])}`);
+        } else {
+            this.log.debug(`DEBUG mobile-alerts: Keine Sensoren gefunden für Phone_${phoneId}. HTML-Auszug: ${String(html).replace(/\s+/g,' ').substr(0,800)}`);
+        }
+
+        // Verarbeite und lege die States/Objekte an
+        await this.applySensorsToIoBroker(phoneId, sensors);
+        this.log.info(`Erfolgreich ${sensors.length} Sensor(en) für Phone_${phoneId} verarbeitet.`);
+    }
+
+    buildUrlForPhone(phoneId) {
+        // Standard-URL-Format; passe bei Bedarf an die echte Ziel-URL an
+        // Falls du eine andere URL verwendest, sag mir kurz welche.
+        return `https://example.com/phone/${encodeURIComponent(phoneId)}`;
+    }
+
+    parseHtmlForSensors(html, phoneId) {
+        // Beispiel-Parser mit cheerio; diesen Block anpassen, falls dein HTML anders ist.
+        const $ = cheerio.load(html);
         const sensors = [];
 
-        // jedes Sensor-Block oder table scannen
-         $ ('div.sensor, table.table').each((i, el) => {
-            const t =  $ (el).text().trim().replace(/\s+/g, ' ');
-            if (!t) return;
+        // Beispiel: jede ".sensor" Klasse ist ein Sensorblock
+        $('.sensor, .device, .reading').each((i, el) => {
+            try {
+                const block = $(el);
+                const name = block.find('.name, .device-name').first().text().trim() || `sensor_${i}`;
+                const tempText = block.find('.temp, .temperature').first().text().trim();
+                const humText = block.find('.hum, .humidity').first().text().trim();
+                const cable = block.find('.cable, .kabel').length > 0; // Beispiel-Flag
 
-            const name =  $ (el).find('h3, .sensor-name').first().text().trim() || `Sensor_ $ {i}`;
-            const data = { name };
+                const temp = this.parseNumberFromString(tempText);
+                const hum = this.parseNumberFromString(humText);
 
-            // --- Feldextraktion (spezifisch zuerst, dann Fallbacks) ---
-            const ts = t.match(/Zeitpunkt\s+([\d:. ]+)/i);
-            if (ts) data.timestamp = ts[1].trim();
-
-            // Temperatur: Innen / Außen / generisch / Kabelsensor
-            const tempIn = t.match(/Temperatur\s*Innen\s+([-+\d,.-]+)\s*C/i);
-            if (tempIn) data.temperature_inside = parseFloat(tempIn[1].replace(',', '.'));
-
-            const tempOut = t.match(/Temperatur\s*Au[ßs]en\s+([-+\d,.-]+)\s*C/i);
-            if (tempOut) data.temperature_outside = parseFloat(tempOut[1].replace(',', '.'));
-
-            const tempCable = t.match(/Temperatur\s+Kabelsensor\s+([-+\d,.-]+)\s*C/i);
-            if (tempCable) data.temperature_cable = parseFloat(tempCable[1].replace(',', '.'));
-
-            // Generischer Temperatur-Fallback (wenn keine spezifischen vorhanden)
-            if (data.temperature_inside === undefined && data.temperature_outside === undefined && data.temperature_cable === undefined) {
-                const temp = t.match(/Temperatur\s+([-+\d,.-]+)\s*C(?!\s*Kabelsensor)/i);
-                if (temp) data.temperature = parseFloat(temp[1].replace(',', '.'));
+                const sensor = {
+                    id: this.sanitizeId(`${phoneId}.${name}`),
+                    name,
+                    temperature: Number.isFinite(temp) ? temp : null,
+                    humidity: Number.isFinite(hum) ? hum : null,
+                    cable: cable || false,
+                    raw: block.text().trim().substr(0, 1000),
+                };
+                sensors.push(sensor);
+            } catch (e) {
+                this.log.debug(`parseHtmlForSensors: Fehler beim Parsen eines Blocks: ${e.message}`);
             }
-
-            // Luftfeuchte: Innen / Außen / generisch
-            const humIn = t.match(/Luftfeuchte\s*Innen\s+(\d{1,3})\s*%/i);
-            if (humIn) data.humidity_inside = parseInt(humIn[1], 10);
-
-            const humOut = t.match(/Luftfeuchte\s*Au[ßs]en\s+(\d{1,3})\s*%/i);
-            if (humOut) data.humidity_outside = parseInt(humOut[1], 10);
-
-            if (data.humidity_inside === undefined && data.humidity_outside === undefined) {
-                const hum = t.match(/Luftfeuchte\s+(\d{1,3})\s*%/i);
-                if (hum) data.humidity = parseInt(hum[1], 10);
-            }
-
-            // Durchschnitts-Luftfeuchten (3H,24H,7D,30D)
-            const hum3 = t.match(/Durchschn\.\s*Luftf\.?\s*3H\s+(\d{1,3})\s*%/i) || t.match(/Durchschn\. Luftf\. 3H\s+(\d{1,3})\s*%/i);
-            if (hum3) data.humidity_avg_3h = parseInt(hum3[1], 10);
-
-            const hum24 = t.match(/Durchschn\.\s*Luftf\.?\s*24H\s+(\d{1,3})\s*%/i) || t.match(/Durchschn\. Luftf\. 24H\s+(\d{1,3})\s*%/i);
-            if (hum24) data.humidity_avg_24h = parseInt(hum24[1], 10);
-
-            const hum7 = t.match(/Durchschn\.\s*Luftf\.?\s*7D\s+(\d{1,3})\s*%/i) || t.match(/Durchschn\. Luftf\. 7D\s+(\d{1,3})\s*%/i);
-            if (hum7) data.humidity_avg_7d = parseInt(hum7[1], 10);
-
-            const hum30 = t.match(/Durchschn\.\s*Luftf\.?\s*30D\s+(\d{1,3})\s*%/i) || t.match(/Durchschn\. Luftf\. 30D\s+(\d{1,3})\s*%/i);
-            if (hum30) data.humidity_avg_30d = parseInt(hum30[1], 10);
-
-            // Regen
-            const rain = t.match(/Regen\s+([\d,.-]+)\s*mm/i);
-            if (rain) data.rain = parseFloat(rain[1].replace(',', '.'));
-
-            // Wind (m/s), Böe, Richtung
-            const wind = t.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i);
-            if (wind) data.wind = this.convertWind(parseFloat(wind[1].replace(',', '.')));
-
-            const gust = t.match(/Böe\s+([\d,.-]+)\s*m\/s/i);
-            if (gust) data.gust = this.convertWind(parseFloat(gust[1].replace(',', '.')));
-
-            const dir = t.match(/Windrichtung\s+([A-Za-zäöüÄÖÜß-]+)/i);
-            if (dir) data.wind_direction = dir[1].trim();
-
-            // Batterie
-            const bat = t.match(/Batterie\s+(\d{1,3})\s*%/i);
-            if (bat) data.battery = parseInt(bat[1], 10);
-
-            // Bodenfeuchte (wet)
-            const wet = t.match(/Bodenfeuchte\s+(Nass|Trocken)/i);
-            if (wet) data.wet = wet[1] === 'Nass';
-
-            // Kontaktsensor
-            const door = t.match(/Kontaktsensor\s+(Geschlossen|Offen)/i);
-            if (door) {
-                data.contact = door[1] === 'Offen';
-                data.contact_text = door[1];
-            }
-
-            sensors.push(data);
         });
 
-        // Jetzt die sensors in ioBroker-Objekte und States schreiben
-        // Phone Ordner: Phone_<phoneId> (wie du gewünscht hattest)
-        const phoneBase = `Phone_ $ {phoneId}`;
+        // Falls keine .sensor Blocks gefunden wurden: Fallback-Versuch mit Regex (einfach)
+        if (sensors.length === 0) {
+            const fallback = [];
+            const tempMatches = html.match(/([-+]?[0-9]*\.?[0-9]+)\s?°?C/gi) || [];
+            const humMatches = html.match(/([0-9]{1,3})\s?%/g) || [];
+            if (tempMatches.length || humMatches.length) {
+                const t = tempMatches[0] ? parseFloat(tempMatches[0]) : null;
+                const h = humMatches[0] ? parseInt(humMatches[0]) : null;
+                fallback.push({
+                    id: this.sanitizeId(`${phoneId}.fallback_sensor`),
+                    name: 'fallback_sensor',
+                    temperature: Number.isFinite(t) ? t : null,
+                    humidity: Number.isFinite(h) ? h : null,
+                    cable: false,
+                    raw: html.replace(/\s+/g, ' ').substr(0, 800),
+                });
+            }
+            return fallback;
+        }
 
-        for (let sIndex = 0; sIndex < sensors.length; sIndex++) {
-            const sensor = sensors[sIndex];
+        return sensors;
+    }
 
-            // sensorName sanitized nur für Objekt-ID, common.name bleibt lesbar
-            const sensorId = this.sanitizeId(sensor.name) || `sensor_ $ {sIndex}`;
-            // falls gleiche ID trotzdem doppelt vorkommt (gleicher Name mehrmals) -> index anhängen
-            const sensorBase = `mobile-alerts.0. $ {phoneBase}. $ {sensorId}`;
+    parseNumberFromString(s) {
+        if (!s) return NaN;
+        const m = s.replace(',', '.').match(/-?[0-9]*\.?[0-9]+/);
+        return m ? parseFloat(m[0]) : NaN;
+    }
 
-            // Erstelle Ordner-Objekt (wenn nicht existiert)
-            await this.setObjectNotExistsAsync(` $ {sensorBase}`, {
-                type: 'channel',
+    sanitizeId(id) {
+        // sichere Objekt-ID: nur a-z0-9_.- ; ersetze Umlaute und Leerzeichen
+        if (!id) return '';
+        const mapUml = { 'ä': 'ae', 'ö': 'oe', 'ü': 'ue', 'ß': 'ss', 'Ä': 'Ae', 'Ö': 'Oe', 'Ü': 'Ue' };
+        id = id.replace(/[\u00C0-\u017F]/g, ch => mapUml[ch] || ch);
+        return id
+            .toString()
+            .trim()
+            .replace(/\s+/g, '_')
+            .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+            .replace(/_+/g, '_')
+            .toLowerCase();
+    }
+
+    async applySensorsToIoBroker(phoneId, sensors) {
+        // Basis-Pfad für diesen Adapter/Phone
+        const base = `mobile-alerts.0.Phone_${this.sanitizeId(phoneId)}`;
+
+        // Erzeuge root-Objekt (falls nicht existiert)
+        try {
+            await this.setObjectNotExistsAsync(`${base}`, {
+                type: 'device',
                 common: {
-                    name: sensor.name,
-                    role: 'sensor',
+                    name: `Phone ${phoneId}`
                 },
-                native: { phoneId },
+                native: {}
             });
+        } catch (e) {
+            this.log.error(`DEBUG mobile-alerts: Fehler setObjectNotExistsAsync für ${base}: ${e.message}`);
+        }
 
-            // Für jeden Key in sensor (außer name) State anlegen und setzen
-            for (const [key, val] of Object.entries(sensor)) {
-                if (key === 'name') continue;
+        for (const sensor of sensors) {
+            // Erzeuge ein Device-Ordner für jeden Sensor (keine bestehenden Keys überschreiben)
+            const sensorObjId = `${base}.${this.sanitizeId(sensor.name)}`;
+            try {
+                await this.setObjectNotExistsAsync(sensorObjId, {
+                    type: 'channel',
+                    common: { name: sensor.name },
+                    native: {}
+                });
+            } catch (e) {
+                this.log.error(`DEBUG mobile-alerts: Fehler setObjectNotExistsAsync für ${sensorObjId}: ${e.message}`);
+            }
 
-                const stateId = ` $ {sensorBase}. $ {key}`;
+            // Temperature state
+            if (sensor.temperature !== null && sensor.temperature !== undefined) {
+                const stateId = `${sensorObjId}.temperature`;
+                try {
+                    await this.setObjectNotExistsAsync(stateId, {
+                        type: 'state',
+                        common: {
+                            name: `${sensor.name} Temperature`,
+                            type: 'number',
+                            role: 'value.temperature',
+                            unit: '°C',
+                            read: true,
+                            write: false,
+                        },
+                        native: {}
+                    });
+                } catch (e) {
+                    this.log.error(`DEBUG mobile-alerts: Fehler setObjectNotExistsAsync für ${stateId}: ${e.message}`);
+                }
+                try {
+                    await this.setStateAsync(stateId, { val: sensor.temperature, ack: true });
+                } catch (e) {
+                    this.log.error(`DEBUG mobile-alerts: Fehler setStateAsync für ${stateId}: ${e.message}`);
+                }
+            }
 
-                // existenz prüfen und bei Bedarf anlegen
-                await this.setObjectNotExistsAsync(stateId, {
+            // Humidity state
+            if (sensor.humidity !== null && sensor.humidity !== undefined) {
+                const stateId = `${sensorObjId}.humidity`;
+                try {
+                    await this.setObjectNotExistsAsync(stateId, {
+                        type: 'state',
+                        common: {
+                            name: `${sensor.name} Humidity`,
+                            type: 'number',
+                            role: 'value.humidity',
+                            unit: '%',
+                            read: true,
+                            write: false,
+                        },
+                        native: {}
+                    });
+                } catch (e) {
+                    this.log.error(`DEBUG mobile-alerts: Fehler setObjectNotExistsAsync für ${stateId}: ${e.message}`);
+                }
+                try {
+                    await this.setStateAsync(stateId, { val: sensor.humidity, ack: true });
+                } catch (e) {
+                    this.log.error(`DEBUG mobile-alerts: Fehler setStateAsync für ${stateId}: ${e.message}`);
+                }
+            }
+
+            // Kabel-Sensor Flag (optional)
+            try {
+                const cableId = `${sensorObjId}.cable`;
+                await this.setObjectNotExistsAsync(cableId, {
                     type: 'state',
                     common: {
-                        name: key,
-                        type: typeof val === 'number' ? 'number' : (typeof val === 'boolean' ? 'boolean' : 'string'),
-                        role: this.mapRole(key),
+                        name: `${sensor.name} Cable`,
+                        type: 'boolean',
+                        role: 'indicator',
                         read: true,
                         write: false,
-                        unit: this.mapUnit(key),
                     },
-                    native: {},
+                    native: {}
                 });
-
-                // setState (ack = true)
-                await this.setStateAsync(stateId, { val, ack: true });
+                await this.setStateAsync(cableId, { val: !!sensor.cable, ack: true });
+            } catch (e) {
+                this.log.debug(`DEBUG mobile-alerts: Fehler beim Anlegen/Setzen cable-Flag für ${sensorObjId}: ${e.message}`);
             }
         }
+    }
 
-        this.log.info(`Erfolgreich  $ {sensors.length} Sensor(en) aktualisiert für  $ {phoneBase}.`);
-        await this.setStateAsync('info.connection', { val: true, ack: true });
-
-    } catch (err) {
-        if (err.response) {
-            this.log.error(`Fehler beim Abruf von Phone_ $ {phoneId}: HTTP  $ {err.response.status}`);
-        } else if (err.code === 'ECONNABORTED') {
-            this.log.error(`Fehler beim Abruf von Phone_ $ {phoneId}: Timeout`);
-        } else {
-            this.log.error(`Fehler beim Abruf von Phone_ $ {phoneId}: ${err.message}`);
+    async onUnload(callback) {
+        try {
+            if (this.pollTimer) {
+                clearInterval(this.pollTimer);
+                this.pollTimer = null;
+            }
+            this.log.info('Adapter stopped and timer cleared');
+            callback();
+        } catch (e) {
+            callback();
         }
-        await this.setStateAsync('info.connection', { val: false, ack: true });
     }
 }
-}
+
 if (require.main !== module) {
     module.exports = options => new MobileAlerts(options);
 } else {
