@@ -4,13 +4,17 @@ const utils = require('@iobroker/adapter-core');
 const axios = require('axios');
 const cheerio = require('cheerio');
 
+/* Hilfsfunktion für Zahlen */
+function num(v) {
+  return parseFloat(String(v).replace(',', '.'));
+}
+
 class MobileAlerts extends utils.Adapter {
   constructor(options) {
     super({
       ...options,
       name: 'mobile-alerts',
     });
-
     this.on('ready', this.onReady.bind(this));
     this.on('unload', this.onUnload.bind(this));
     this.pollTimer = null;
@@ -18,35 +22,28 @@ class MobileAlerts extends utils.Adapter {
   }
 
   async onReady() {
-    try {
-      const phoneIds = (this.config.phoneId || '').split(',').map(p => p.trim()).filter(Boolean);
-      const pollInterval = Number(this.config.pollInterval || 300);
-      this.windUnit = this.config.windUnit || 'm/s';
+    const phoneIds = (this.config.phoneId || '').split(',').map(p => p.trim()).filter(Boolean);
+    const pollInterval = Number(this.config.pollInterval || 300);
+    this.windUnit = this.config.windUnit || 'm/s';
 
-      if (!phoneIds.length) {
-        this.log.error('Keine PhoneID angegeben!');
-        return;
-      }
-
-      // initial fetch
-      for (const id of phoneIds) {
-        try {
-          await this.fetchData(id);
-        } catch (e) {
-          // Fehler bereits geloggt in fetchData
-        }
-      }
-
-      // poll timer
-      this.pollTimer = setInterval(() => {
-        phoneIds.forEach(id => {
-          this.fetchData(id).catch(() => {});
-        });
-      }, pollInterval * 1000);
-
-    } catch (err) {
-      this.log.error(`onReady Fehler: ${err && err.message}`);
+    if (!phoneIds.length) {
+      this.log.error('Keine PhoneID angegeben!');
+      return;
     }
+
+    // initial fetch
+    for (const id of phoneIds) {
+      try {
+        await this.fetchData(id);
+      } catch (e) {
+        this.log.error(`fetchData initial für ${id} failed: ${e && e.message}`);
+      }
+    }
+
+    // poll timer
+    this.pollTimer = setInterval(() => {
+      phoneIds.forEach(id => this.fetchData(id).catch(e => this.log.debug(`fetchData error ${e && e.message}`)));
+    }, pollInterval * 1000);
   }
 
   onUnload(callback) {
@@ -69,284 +66,172 @@ class MobileAlerts extends utils.Adapter {
   async fetchData(phoneId) {
     try {
       if (!phoneId) {
-        this.log && this.log.warn && this.log.warn('fetchData: kein phoneId übergeben');
+        this.log.warn('fetchData: kein phoneId übergeben');
         return;
       }
 
-      const encoded = encodeURIComponent(phoneId);
-      const url = `https://measur[...]/${encoded}/SensorsOverview`; // <-- anpassen falls nötig
-      this.log.debug(`Abruf: ${url}`);
+      const url = `https://measurements.mobile-alerts.eu/Home/SensorsOverview?phoneId=${encodeURIComponent(phoneId)}`;
+      this.log.debug(`Abruf URL: ${url}`);
 
-      const resp = await axios.get(url, {
-        timeout: 15000,
-        headers: {
-          'User-Agent': 'iobroker-mobile-alerts/1.0 (+https://github.com/your-repo)',
-          Accept: 'text/html,application/xhtml+xml',
-        },
-      });
-
-      const html = resp.data;
+      const res = await axios.get(url, { timeout: 15000 });
+      const html = res.data;
       const $ = cheerio.load(html);
 
-      // Beispiel: Annahme: jeder Sensor ist in einem container mit Klasse .sensor (anpassen falls Seite abweicht)
       const sensors = [];
 
-      // Probe: mehrere mögliche DOM-Layouts berücksichtigen
-      $('.sensor, .device, .card').each((i, el) => {
-        try {
-          const el$ = $(el);
-          let name = el$.find('.name, .title, h3, h4').first().text().trim();
-          if (!name) {
-            name = `Sensor_${i+1}`;
-          }
-          // kompletten Text als Rohtext speichern (für spätere Label-Checks)
-          const rawText = el$.text().replace(/\s+/g, ' ').trim();
+      $('div.sensor, table.table').each((i, el) => {
+        const text = $(el).text().trim().replace(/\s+/g, ' ');
+        if (!text) return;
 
-          // Versuche Label/Value Paare robust zu extrahieren:
-          const data = {};
-          // 1) table rows (th/td or td/td)
-          el$.find('tr').each((r, row) => {
-            const th = $(row).find('th').first().text().trim();
-            const tds = $(row).find('td');
-            const val = tds.length ? $(tds[0]).text().trim() : '';
-            if (th) data[this._keyify(th)] = val;
-          });
-          // 2) dl dt/dd
-          el$.find('dt').each((d, dt) => {
-            const key = $(dt).text().trim();
-            const dd = $(dt).next('dd').text().trim();
-            if (key) data[this._keyify(key)] = dd;
-          });
-          // 3) label/value pairs (span.label + span.value or div.label/value)
-          el$.find('.label').each((l, lab) => {
-            const key = $(lab).text().trim();
-            const val = $(lab).siblings('.value').first().text().trim() || $(lab).next().text().trim();
-            if (key) data[this._keyify(key)] = val;
-          });
-          // 4) fallback: lines like "Temperature: 12.3 °C"
-          const lines = rawText.split(/[\r\n]/).map(s => s.trim()).filter(Boolean);
-          lines.forEach(line => {
-            const m = line.match(/^\s*([^:]{2,40}?):\s*([-+]?[\d.,]+)\s*([^\d\s]*)/);
-            if (m) {
-              data[this._keyify(m[1])] = m[2].replace(',', '.');
-            }
-          });
+        // Name / ID / Zeit
+        const nameMatch = text.match(/^(.*?)\s+ID\s+/);
+        const idMatch = text.match(/ID\s+([A-F0-9\-]+)/i);
+        const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+)/i);
+        const id = idMatch ? idMatch[1] : null;
+        const timestamp = timeMatch ? timeMatch[1].trim() : null;
 
-          // Map some common keys to normalized field names
-          const normalized = this._normalizeSensorData(data);
+        let battery = 'ok';
+        if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) battery = 'low';
 
-          sensors.push({
-            name: this._safeName(name),
-            rawText,
-            data: normalized,
-          });
-        } catch (e) {
-          this.log.debug(`Parser Fehler für Sensor ${i}: ${e && e.message}`);
-        }
+        const name = nameMatch ? nameMatch[1].trim() : `Sensor_${i + 1}`;
+        const data = { id, timestamp, battery, _rawText: text };
+
+        // Temperatur & Feuchte
+        const tempIn = text.match(/Temperatur(?:\s*Innen)?\s+([\d,.\-]+)\s*°?\s*C/i);
+        const humIn = text.match(/Luftfeuchte(?:\s*Innen)?\s+([\d,.\-]+)\s*%/i);
+        const tempOut = text.match(/Temperatur(?:\s*Außen|\s*Aussen)\s+([\d,.\-]+)\s*°?\s*C/i);
+        const humOut = text.match(/Luftfeuchte(?:\s*Außen|\s*Aussen)\s+([\d,.\-]+)\s*%/i);
+        const tempCable = text.match(/Temperatur(?:\s*Kabelsensor|\s*Kabel)\s+([\d,.\-]+)\s*°?\s*C/i);
+
+        if (tempIn) data.temperature = num(tempIn[1]);
+        if (humIn) data.humidity = num(humIn[1]);
+        if (tempOut) data.temperature_out = num(tempOut[1]);
+        if (humOut) data.humidity_out = num(humOut[1]);
+        if (tempCable) data.temperature_cable = num(tempCable[1]);
+
+        // Feuchtesensor trocken/feucht
+        const wetMatch = text.match(/\b(trocken|feucht)\b/i);
+        if (wetMatch) data.wet = wetMatch[1].toLowerCase() === 'feucht';
+
+        // Regen
+        const rainTotal = text.match(/Gesamt\s+([\d,.\-]+)\s*mm/i);
+        const rainRate = text.match(/Rate\s+([\d,.\-]+)\s*mm\/h/i);
+        if (rainTotal) data.rain_total = num(rainTotal[1]);
+        if (rainRate) data.rain_rate = num(rainRate[1]);
+
+        // Wind
+        const windSpeed = text.match(/Windgeschwindigkeit\s+([\d,.\-]+)\s*(m\/s|km\/h)?/i);
+        const windGust = text.match(/Böe\s+([\d,.\-]+)\s*(m\/s|km\/h)?/i);
+        const windDir = text.match(/Windrichtung\s+([A-Za-zäöüß]+|\d{1,3}°)/i);
+        if (windSpeed) data.wind_speed = this.convertWind(num(windSpeed[1]));
+        if (windGust) data.wind_gust = this.convertWind(num(windGust[1]));
+        if (windDir) data.wind_dir = windDir[1];
+
+        sensors.push({ name, ...data });
       });
 
-      // Falls keine .sensor gefunden wurden, versuche generellen Fallback: suche nach "Temperatur" etc. im ganzen Document
       if (!sensors.length) {
-        this.log.debug('Keine .sensor Elemente gefunden, genereller Fallback versuche Werte im ganzen HTML');
-        const whole = $('body').text().replace(/\s+/g, ' ').trim();
-        const fallback = {};
-        const findNumber = (labelRegex) => {
-          const re = new RegExp(labelRegex + '\\s*[:\\-]?\\s*([-+]?\\d+[\\d.,]*)', 'i');
-          const mm = whole.match(re);
-          return mm ? mm[1].replace(',', '.') : null;
-        };
-        const t = findNumber('Temperatur|Temperature|Temp');
-        if (t) fallback.temperature = t;
-        if (Object.keys(fallback).length) {
-          sensors.push({
-            name: 'Fallback',
-            rawText: whole,
-            data: this._normalizeSensorData(fallback),
-          });
-        }
+        this.log.warn(`Keine Sensoren gefunden für ${phoneId}`);
+        await this.setStateAsync('info.connection', { val: false, ack: true });
+        return;
       }
 
-      // Jetzt States anlegen/aktualisieren
-      const baseRoot = phoneId; // z. B. "12345"
-      const phoneNode = `Phone_${phoneId}`; // Zwischennode: Phone_12345
-
-      // Plausibilitätsbereiche für numerische Felder
-      const numericRanges = {
+      // Erlaubte Ranges (einfacher Guard gegen Fantasiewerte)
+      const ranges = {
         temperature: { min: -50, max: 60 },
+        temperature_out: { min: -50, max: 60 },
+        temperature_cable: { min: -50, max: 60 },
         humidity: { min: 0, max: 100 },
-        rain: { min: 0, max: 100000 },
-        wind: { min: 0, max: 300 },
-        battery: { min: 0, max: 100 },
+        humidity_out: { min: 0, max: 100 },
+        rain_total: { min: 0, max: 100000 },
+        rain_rate: { min: 0, max: 10000 },
+        wind_speed: { min: 0, max: 200 },
+        wind_gust: { min: 0, max: 300 },
       };
 
+      // Objekte unter Phone_<phoneId> > Sensorname
       for (const sensor of sensors) {
-        const sensorIdSafe = sensor.name || 'Sensor';
-        const base = `${baseRoot}.${phoneNode}.${sensorIdSafe}`;
+        const sensorNameSafe = sensor.name.replace(/\s+/g, '_').replace(/[^\w\-]/g, '');
+        const base = `${phoneId}.Phone_${phoneId}.${sensorNameSafe}`;
 
-        // Metadaten-Objekt für Sensor (Name)
+        // channel for sensor
         await this.setObjectNotExistsAsync(`${base}`, {
-          type: 'device',
+          type: 'channel',
           common: { name: sensor.name },
-          native: {},
+          native: { phoneId },
         });
 
-        // always set id and timestamp if present
-        sensor.data.timestamp && await this._createStateAndSet(base, 'timestamp', sensor.data.timestamp, { role: 'value.time', type: 'string' });
+        // write fields (skip internal _rawText)
+        for (const [key, val] of Object.entries(sensor)) {
+          if (key === 'name' || key === '_rawText') continue;
+          if (val === null || typeof val === 'undefined') continue;
 
-        // Iterate fields
-        for (const [key, rawVal] of Object.entries(sensor.data)) {
-          if (key === 'timestamp') continue;
-
-          let val = rawVal;
-          // normalize numeric strings
-          if (typeof val === 'string' && val.match(/^[-+]?[\d.,]+$/)) {
-            val = Number(val.replace(',', '.'));
-          }
-
-          // Determine if numeric expected
-          const expectsNumber = Object.keys(numericRanges).some(k => key.includes(k));
-          if (expectsNumber) {
-            const n = Number(val);
-            if (!isFinite(n) || isNaN(n)) {
-              this.log.debug(`Überspringe ${key} für ${sensor.name}: kein gültiger numerischer Wert (${val})`);
+          // Guard numeric ranges
+          if (typeof val === 'number' && ranges[key]) {
+            const r = ranges[key];
+            if (isNaN(val) || val < r.min || val > r.max) {
+              this.log.debug(`Wert ausgeschlossen (außerhalb range) ${base}.${key} = ${val}`);
               continue;
             }
-            const rangeKey = Object.keys(numericRanges).find(k => key.includes(k));
-            const { min, max } = numericRanges[rangeKey];
-            if (n < min || n > max) {
-              this.log.warn(`Überspringe ${key} für ${sensor.name}: Wert ${n} ausserhalb Bereich ${min}-${max}`);
-              continue;
-            }
-            // special conversions
-            if (key.includes('wind')) {
-              const conv = this.convertWind(Number(n));
-              await this._createStateAndSet(base, key, conv, { role: this.mapRole(key), type: 'number', unit: this.mapUnit(key) });
-            } else {
-              await this._createStateAndSet(base, key, Number(n), { role: this.mapRole(key), type: 'number', unit: this.mapUnit(key) });
-            }
-          } else {
-            // For non-numeric: check label existence in rawText for some ambiguous fields
-            const ambiguousLabels = {
-              temperature_cable: ['kabel', 'kabelsensor'],
-              temperature_out: ['aussen', 'außen', 'outside'],
-              wet: ['nass', 'wet'],
-            };
-            if (Object.keys(ambiguousLabels).some(k => key.includes(k))) {
-              const labels = ambiguousLabels[Object.keys(ambiguousLabels).find(k => key.includes(k))];
-              const found = labels.some(lbl => new RegExp(lbl, 'i').test(sensor.rawText));
-              if (!found) {
-                this.log.debug(`Überspringe ${key} für ${sensor.name}: Label nicht gefunden im Rohtext`);
-                continue;
-              }
-            }
-
-            // set string/boolean
-            const type = (typeof val === 'boolean') ? 'boolean' : 'string';
-            await this._createStateAndSet(base, key, val, { role: this.mapRole(key), type, unit: this.mapUnit(key) });
           }
+
+          const common = {
+            name: key,
+            type: typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : 'string',
+            role: this.mapRole(key),
+            read: true,
+            write: false,
+            unit: this.mapUnit(key),
+          };
+
+          await this.setObjectNotExistsAsync(`${base}.${key}`, {
+            type: 'state',
+            common,
+            native: {},
+          });
+
+          await this.setStateAsync(`${base}.${key}`, { val: common.type === 'number' ? Number(val) : val, ack: true });
         }
       }
 
       this.log.info(`Erfolgreich ${sensors.length} Sensor(en) aktualisiert für ${phoneId}.`);
       await this.setStateAsync('info.connection', { val: true, ack: true });
-
     } catch (err) {
-      const status = err && err.response && err.response.status;
-      if (status === 404) {
-        this.log && this.log.error && this.log.error(`fetchData: 404 für phoneId=${phoneId}`);
-      } else {
-        this.log && this.log.error && this.log.error(`Fehler beim Abruf für ${phoneId}: ${err && err.message}`);
-      }
+      this.log.error(`Fehler beim Abruf für ${phoneId}: ${err && err.message}`);
       await this.setStateAsync('info.connection', { val: false, ack: true });
     }
   }
 
-  // ---------------------------
-  // Hilfsfunktionen
-  // ---------------------------
-
-  // Normalisiert Rohkeys zu maschinenfreundlichen keys
-  _keyify(label) {
-    if (!label) return '';
-    return label.toLowerCase()
-      .replace(/°/g, '')
-      .replace(/[^a-z0-9_]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .replace(/_+/g, '_');
-  }
-
-  // Sicherheitsname für Sensor (keine Sonderzeichen)
-  _safeName(name) {
-    return name.replace(/[^\wäöüÄÖÜß\-]+/g, '_').replace(/^_+|_+$/g, '');
-  }
-
-  // Normalisiert einige häufige Feldnamen
-  _normalizeSensorData(data) {
-    const out = {};
-    for (const [k, v] of Object.entries(data)) {
-      let key = k;
-      // map common variants
-      if (/temp|temperatur|temperature/.test(k)) key = 'temperature';
-      if (/humidity|feuchte/.test(k)) key = 'humidity';
-      if (/rain|regen/.test(k)) key = 'rain';
-      if (/wind/.test(k)) key = 'wind_speed';
-      if (/gust/.test(k)) key = 'wind_gust';
-      if (/battery|akku/.test(k)) key = 'battery';
-      if (/time|zeit/.test(k)) key = 'timestamp';
-      if (/wet|nass/.test(k)) key = 'wet';
-      out[key] = v;
-    }
-    return out;
-  }
-
-  // Helper: create state if not exists and set value
-  async _createStateAndSet(base, key, val, meta = {}) {
-    const id = `${base}.${key}`;
-    const common = {
-      name: key,
-      type: meta.type || (typeof val === 'number' ? 'number' : (typeof val === 'boolean' ? 'boolean' : 'string')),
-      role: meta.role || this.mapRole(key),
-      read: true,
-      write: false,
-      unit: meta.unit || this.mapUnit(key),
-    };
-    await this.setObjectNotExistsAsync(id, {
-      type: 'state',
-      common,
-      native: {},
-    });
-    await this.setStateAsync(id, { val: (common.type === 'number' ? Number(val) : val), ack: true });
-  }
-
   convertWind(v) {
+    if (!v && v !== 0) return v;
     if (this.windUnit === 'km/h') return +(v * 3.6).toFixed(1);
     if (this.windUnit === 'bft') return +Math.round(Math.pow(v / 0.836, 2 / 3));
     return v;
   }
 
   mapRole(k) {
-    k = k.toLowerCase();
-    if (k.includes('temperature')) return 'value.temperature';
-    if (k.includes('humidity')) return 'value.humidity';
-    if (k.includes('rain')) return 'value.rain';
-    if (k.includes('wind')) return 'value.wind';
-    if (k.includes('battery')) return 'indicator.battery';
-    if (k.includes('timestamp') || k.includes('time')) return 'value.time';
-    if (k === 'wet') return 'sensor.water';
+    const key = k.toLowerCase();
+    if (key.includes('temperature')) return 'value.temperature';
+    if (key.includes('humidity')) return 'value.humidity';
+    if (key.includes('rain')) return 'value.rain';
+    if (key.includes('wind')) return 'value.wind';
+    if (key.includes('battery')) return 'indicator.battery';
+    if (key.includes('timestamp') || key.includes('time')) return 'value.time';
+    if (key === 'wet') return 'sensor.water';
     return 'state';
   }
 
   mapUnit(k) {
-    k = k.toLowerCase();
-    if (k.includes('temperature')) return '°C';
-    if (k.includes('humidity')) return '%';
-    if (k.includes('rain')) return 'mm';
-    if (k.includes('wind')) {
+    const key = k.toLowerCase();
+    if (key.includes('temperature')) return '°C';
+    if (key.includes('humidity')) return '%';
+    if (key.includes('rain')) return 'mm';
+    if (key.includes('wind')) {
       if (this.windUnit === 'km/h') return 'km/h';
       if (this.windUnit === 'bft') return 'Bft';
       return 'm/s';
     }
-    if (k.includes('battery')) return '%';
+    if (key.includes('battery')) return '%';
     return '';
   }
 }
