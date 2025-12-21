@@ -57,11 +57,11 @@ class MobileAlerts extends utils.Adapter {
 
         const num = x => parseFloat(x.replace(',', '.'));
 
-        const tIn = text.match(/Temperatur(?: Innen)?\s+(-?[\d.,]+)\s*C/i);
-        const hIn = text.match(/Luftfeuchte(?: Innen)?\s+([\d.,]+)\s*%/i);
-        const tOut = text.match(/Temperatur Außen\s+(-?[\d.,]+)\s*C/i);
-        const hOut = text.match(/Luftfeuchte Außen\s+([\d.,]+)\s*%/i);
-        const tCable = text.match(/Temperatur Kabelsensor\s+(-?[\d.,]+)\s*C/i);
+        const tIn = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
+        const hIn = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
+        const tOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
+        const hOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
+        const tCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
 
         if (tIn) data.temperature = num(tIn[1]);
         if (hIn) data.humidity = num(hIn[1]);
@@ -69,40 +69,39 @@ class MobileAlerts extends utils.Adapter {
         if (hOut) data.humidity_out = num(hOut[1]);
         if (tCable) data.temperature_cable = num(tCable[1]);
 
-        // =============================
-        // ✔ FIX: Regensensor + 0-Werte
-        // =============================
-        const rainTotalMatch =
-          text.match(/Gesamt\s+([\d.,]+)\s*mm/i) ||
-          text.match(/Regen(?:menge)?\s+([\d.,]+)\s*mm/i);
+        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // ✔ FIX: WIND (Windgeschwindigkeit, Böe, Windrichtung)
+        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        const windSpeed =
+          text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i) ||
+          text.match(/Wind\s+([\d,.-]+)\s*m\/s/i);
 
-        if (rainTotalMatch) data.rain_total = num(rainTotalMatch[1]);
+        const windGust =
+          text.match(/Böe\s+([\d,.-]+)\s*m\/s/i) ||
+          text.match(/Windböe[n]?\s+([\d,.-]+)\s*m\/s/i);
 
-        // =============================
-        // ✔ FIX: Wind + 0-Werte + Richtung
-        // =============================
-        const windSpeed = text.match(/Wind\s+([\d.,]+)\s*m\/s/i);
-        const windGust = text.match(/Windböen\s+([\d.,]+)\s*m\/s/i);
-        const windDir = text.match(/Windrichtung\s+([\d.]+)\s*°/i);
+        const windDir = text.match(/Windrichtung\s+([A-Za-zäöüÄÖÜ ]+)/i);
 
-        if (windSpeed) data.wind = this.convertWind(num(windSpeed[1]));
-        if (windGust) data.wind_gust = this.convertWind(num(windGust[1]));
-        if (windDir) data.wind_dir = num(windDir[1]);
+        if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
+        if (windGust)  data.wind_gust  = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
+        if (windDir)   data.wind_dir   = windDir[1].trim();
 
-        // Regenrate mm/h
-        const rainRate = text.match(/Rate\s+([\d.,]+)\s*mm\/h/i);
-        if (rainRate) data.rain_rate = num(rainRate[1]);
+        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // ✔ FIX: HUMIDITY-AVERAGES nur wenn vorhanden
+        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        const avg3h  = text.match(/Durchschn\.?\s+Luftf\.?\s*3H\s+([\d,.-]+|OFL)\s*%/i);
+        const avg24h = text.match(/Durchschn\.?\s+Luftf\.?\s*24H\s+([\d,.-]+|OFL)\s*%/i);
+        const avg7d  = text.match(/Durchschn\.?\s+Luftf\.?\s*7D\s+([\d,.-]+|OFL)\s*%/i);
+        const avg30d = text.match(/Durchschn\.?\s+Luftf\.?\s*30D\s+([\d,.-]+|OFL)\s*%/i);
 
-        // Bodenfeuchte
-        const wet = text.match(/Bodenfeuchte\s+(nass|trocken|wet|dry)/i);
-        if (wet) data.wet = /nass|wet/i.test(wet[1]) ? 1 : 0;
+        if (avg3h)  data.humidity_avg_3h  = avg3h[1] === 'OFL' ? null : num(avg3h[1]);
+        if (avg24h) data.humidity_avg_24h = avg24h[1] === 'OFL' ? null : num(avg24h[1]);
+        if (avg7d)  data.humidity_avg_7d  = avg7d[1] === 'OFL' ? null : num(avg7d[1]);
+        if (avg30d) data.humidity_avg_30d = avg30d[1] === 'OFL' ? null : num(avg30d[1]);
+        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
         sensors.push({ name, ...data });
       });
-
-      // ******************************************************************
-      // STATES SPEICHERN
-      // ******************************************************************
 
       const phoneBase = `Phone_${phoneId}`;
 
@@ -121,38 +120,6 @@ class MobileAlerts extends utils.Adapter {
           native: { phoneId },
         });
 
-        // ================================
-        // ✔ Durchschnittswerte Luftfeuchte
-        // ================================
-        if (sensor.humidity) {
-          const avgTimes = {
-            humidity_avg_3h: 3,
-            humidity_avg_24h: 24,
-            humidity_avg_7d: 24 * 7,
-            humidity_avg_30d: 24 * 30,
-          };
-
-          for (const [avgKey] of Object.entries(avgTimes)) {
-            await this.setObjectNotExistsAsync(`${sensorBase}.${avgKey}`, {
-              type: 'state',
-              common: {
-                name: avgKey,
-                type: 'number',
-                role: 'value.humidity',
-                unit: '%',
-                read: true,
-                write: false,
-              },
-              native: {},
-            });
-
-            await this.setStateAsync(`${sensorBase}.${avgKey}`, { val: sensor.humidity, ack: true });
-          }
-        }
-
-        // ================================
-        // ✔ Normale States
-        // ================================
         for (const [key, val] of Object.entries(sensor)) {
           if (key === 'name') continue;
 
@@ -192,8 +159,7 @@ class MobileAlerts extends utils.Adapter {
     if (k.includes('temperature')) return 'value.temperature';
     if (k.includes('humidity')) return 'value.humidity';
     if (k.includes('rain')) return 'value.rain';
-    if (k.includes('wind') && k !== 'wind_dir') return 'value.wind';
-    if (k === 'wind_dir') return 'value.direction';
+    if (k.includes('wind')) return 'value.wind';
     if (k.includes('battery')) return 'indicator.battery';
     if (k.includes('timestamp')) return 'value.time';
     if (k === 'wet') return 'sensor.water';
@@ -204,12 +170,11 @@ class MobileAlerts extends utils.Adapter {
     if (k.includes('temperature')) return '°C';
     if (k.includes('humidity')) return '%';
     if (k.includes('rain')) return 'mm';
-    if (k.includes('wind') && k !== 'wind_dir') {
+    if (k.includes('wind')) {
       if (this.windUnit === 'km/h') return 'km/h';
       if (this.windUnit === 'bft') return 'Bft';
       return 'm/s';
     }
-    if (k === 'wind_dir') return '°';
     return '';
   }
 }
