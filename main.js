@@ -1,22 +1,5 @@
 'use strict';
 
-/*
- *  Mobile Alerts ioBroker Adapter
- *  Version 1.1.2 (optimized for JS-Controller 7.1)
- *
- *  Supported:
- *  - Temperatur Innen / Außen
- *  - Luftfeuchte
- *  - Historische Luftfeuchte: 3h / 24h / 7d / 30d
- *  - Temperatur Kabelsensor
- *  - Bodensensor (trocken / feucht)
- *  - Regenmenge
- *  - Windrichtung / Windgeschwindigkeit / Böe
- *  - Batterie-Zustand
- *  - Timestamp
- *  - Multi-PhoneID Support
- */
-
 const utils = require('@iobroker/adapter-core');
 const axios = require('axios');
 const cheerio = require('cheerio');
