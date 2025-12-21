@@ -8,6 +8,22 @@ function num(v) {
     return parseFloat(String(v).replace(',', '.'));
 }
 
+// ------------------------------------------------------
+// CLEAN FUNCTION – erzeugt 100% gültige ioBroker IDs
+// ------------------------------------------------------
+function cleanId(str) {
+    if (!str) return '';
+
+    return String(str)
+        .trim()
+        .replace(/<\/?[^>]+(>|$)/g, '')       // HTML entfernen
+        .replace(/[^\w\d_-]+/g, '_')          // ungültige Zeichen ersetzen
+        .replace(/_+/g, '_')                  // doppelte "_" entfernen
+        .replace(/^_+|_+$/g, '')              // "_" am Anfang/Ende entfernen
+        .replace(/\.$/, '')                   // Punkt am Ende entfernen
+        .slice(0, 50);                        // maximale Länge
+}
+
 class MobileAlerts extends utils.Adapter {
 
     constructor(options) {
@@ -21,8 +37,11 @@ class MobileAlerts extends utils.Adapter {
     }
 
     async onReady() {
+        const phoneIds = (this.config.phoneId || '')
+            .split(',')
+            .map(p => p.trim())
+            .filter(Boolean);
 
-        const phoneIds = (this.config.phoneId || '').split(',').map(p => p.trim()).filter(Boolean);
         const pollInterval = this.config.pollInterval || 300;
         this.windUnit = this.config.windUnit || 'm/s';
 
@@ -48,13 +67,8 @@ class MobileAlerts extends utils.Adapter {
 
             $('.panel').each((index, el) => {
 
-                let name = $(el).find('.panel-heading').text().trim();
-
-                // Falls kein Name → leerer String
-                if (!name) name = '';
-
-                // ungültige Zeichen ersetzen
-                name = name.replace(/[^a-zA-Z0-9_-]/g, '_');
+                let rawName = $(el).find('.panel-heading').text().trim();
+                let name = cleanId(rawName) || `Sensor_${index + 1}`;
 
                 const sensor = {
                     name,
@@ -62,14 +76,20 @@ class MobileAlerts extends utils.Adapter {
                 };
 
                 $(el).find('.table tr').each((_, row) => {
-                    const key = $(row).find('td').eq(0).text().trim().toLowerCase().replace(/\s+/g, '_');
+                    const rawKey = $(row).find('td').eq(0).text().trim().toLowerCase();
+                    const key = cleanId(rawKey.replace(/\s+/g, '_'));
+
                     let val = $(row).find('td').eq(1).text().trim();
 
                     if (!key || !val) return;
 
-                    // Zahlen extrahieren
                     const m = val.match(/([-+]?[0-9]*[.,]?[0-9]+)/);
+
                     if (m) val = num(m[1]);
+
+                    if (key.includes('wind') && typeof val === 'number') {
+                        val = this.convertWind(val);
+                    }
 
                     sensor.values[key] = val;
                 });
@@ -78,15 +98,11 @@ class MobileAlerts extends utils.Adapter {
             });
 
             for (const sensor of sensors) {
-
-                let sensorBase = `Phone_${phoneId}.${sensor.name}`;
-
-                // ❗ **Fix: Punkt am Ende entfernen**
-                sensorBase = sensorBase.replace(/\.$/, '');
+                let sensorBase = cleanId(`Phone_${phoneId}_${sensor.name}`);
 
                 await this.setObjectNotExistsAsync(sensorBase, {
-                    type: 'channel',
-                    common: { name: sensor.name || 'Sensor' },
+                    type: 'device',
+                    common: { name: sensor.name },
                     native: {}
                 });
 
@@ -95,7 +111,7 @@ class MobileAlerts extends utils.Adapter {
                     const role = this.mapRole(k);
                     const unit = this.mapUnit(k);
 
-                    const id = `${sensorBase}.${k}`.replace(/\.$/, '');
+                    const id = cleanId(`${sensorBase}_${k}`);
 
                     await this.setObjectNotExistsAsync(id, {
                         type: 'state',
@@ -153,7 +169,7 @@ class MobileAlerts extends utils.Adapter {
         try {
             if (this.interval) clearInterval(this.interval);
             callback();
-        } catch {
+        } catch (e) {
             callback();
         }
     }
