@@ -81,13 +81,10 @@ class MobileAlerts extends utils.Adapter {
         // 🌬️ Wind
         const windSpeed = text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i);
         const windGust = text.match(/Böe\s+([\d,.-]+)\s*m\/s/i);
-        const windMixed = text.match(/(\d{1,3})°\s*([A-Za-zäöüß]+)/i);
-        const windDirOnly = text.match(/Windrichtung\s+([A-Za-zäöüß]+|\d{1,3}°)/i);
-
+        const windDir = text.match(/Windrichtung\s+([A-Za-zäöüß]+|\d{1,3}°)/i);
         if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
         if (windGust) data.wind_gust = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
-        if (windMixed) data.wind_dir = `${windMixed[1]}° ${windMixed[2]}`;
-        else if (windDirOnly) data.wind_dir = windDirOnly[1];
+        if (windDir) data.wind_dir = windDir[1];
 
         sensors.push({ name, ...data });
       });
@@ -97,7 +94,7 @@ class MobileAlerts extends utils.Adapter {
         return;
       }
 
-      // Objektstruktur aufbauen
+      // 💾 Objekte unter PhoneID > Sensorname
       for (const sensor of sensors) {
         const base = `${phoneId}.${sensor.name.replace(/\s+/g, '_')}`;
 
@@ -114,7 +111,7 @@ class MobileAlerts extends utils.Adapter {
             type: 'state',
             common: {
               name: key,
-              type: typeof val === 'number' ? 'number' : 'string',
+              type: typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : 'string',
               role: this.mapRole(key),
               read: true,
               write: false,
