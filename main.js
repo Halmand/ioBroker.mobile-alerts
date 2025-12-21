@@ -43,35 +43,25 @@ class MobileAlerts extends utils.Adapter {
         const text = $(el).text().trim().replace(/\s+/g, ' ');
         if (!text) return;
 
-        const nameMatch = text.match(/^(.*?) ID /);
-        const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
-        const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+)/);
-        const id = idMatch ? idMatch[1] : null;
-        const timestamp = timeMatch ? timeMatch[1].trim() : null;
+        const nameMatch = text.match(/ID\s+([A-F0-9]+)/i);
+        const name = $(el).find('h3, .sensor-name').first().text().trim() || `Sensor_${i}`;
+        const id = nameMatch ? nameMatch[1] : `unknown_${i}`;
 
-        let battery = 'ok';
-        if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) battery = 'low';
+        const data = { name, id };
 
-        const name = nameMatch ? nameMatch[1].trim() : `Sensor_${i + 1}`;
-        const data = { id, timestamp, battery };
+        // Zeitstempel
+        const ts = text.match(/Zeitpunkt\s+([\d:. ]+)/i);
+        if (ts) data.timestamp = ts[1].trim();
 
-        const num = x => parseFloat(x.replace(',', '.'));
+        // Temperatur innen/außen
+        const tIn = text.match(/Temperatur\s+([\d,.-]+)\s*C/i);
+        if (tIn) data.temperature = parseFloat(tIn[1].replace(',', '.'));
 
-        const tIn = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
-        const hIn = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
-        const tOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
-        const hOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
-        const tCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
+        // Luftfeuchte
+        const hIn = text.match(/Luftfeuchte\s+([\d,.-]+)\s*%/i);
+        if (hIn) data.humidity = parseFloat(hIn[1].replace(',', '.'));
 
-        if (tIn) data.temperature = num(tIn[1]);
-        if (hIn) data.humidity = num(hIn[1]);
-        if (tOut) data.temperature_out = num(tOut[1]);
-        if (hOut) data.humidity_out = num(hOut[1]);
-        if (tCable) data.temperature_cable = num(tCable[1]);
-
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        // ✔ FIX: WIND (Windgeschwindigkeit, Böe, Windrichtung)
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // ✔ WIND FIX
         const windSpeed =
           text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i) ||
           text.match(/Wind\s+([\d,.-]+)\s*m\/s/i);
@@ -83,31 +73,20 @@ class MobileAlerts extends utils.Adapter {
         const windDir = text.match(/Windrichtung\s+([A-Za-zäöüÄÖÜ ]+)/i);
 
         if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
-        if (windGust)  data.wind_gust  = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
-        if (windDir)   data.wind_dir   = windDir[1].trim();
+        if (windGust) data.wind_gust = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
+        if (windDir) data.wind_dir = windDir[1].trim();
 
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        // ✔ FIX: HUMIDITY-AVERAGES nur wenn vorhanden
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        const avg3h  = text.match(/Durchschn\.?\s+Luftf\.?\s*3H\s+([\d,.-]+|OFL)\s*%/i);
-        const avg24h = text.match(/Durchschn\.?\s+Luftf\.?\s*24H\s+([\d,.-]+|OFL)\s*%/i);
-        const avg7d  = text.match(/Durchschn\.?\s+Luftf\.?\s*7D\s+([\d,.-]+|OFL)\s*%/i);
-        const avg30d = text.match(/Durchschn\.?\s+Luftf\.?\s*30D\s+([\d,.-]+|OFL)\s*%/i);
+        // ✔ REGEN FIX
+        const rain = text.match(/Regen\s+([\d,.]+)\s*mm/i);
+        if (rain) data.rain = parseFloat(rain[1].replace(',', '.'));
 
-        if (avg3h)  data.humidity_avg_3h  = avg3h[1] === 'OFL' ? null : num(avg3h[1]);
-        if (avg24h) data.humidity_avg_24h = avg24h[1] === 'OFL' ? null : num(avg24h[1]);
-        if (avg7d)  data.humidity_avg_7d  = avg7d[1] === 'OFL' ? null : num(avg7d[1]);
-        if (avg30d) data.humidity_avg_30d = avg30d[1] === 'OFL' ? null : num(avg30d[1]);
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-        sensors.push({ name, ...data });
+        sensors.push(data);
       });
 
       const phoneBase = `Phone_${phoneId}`;
-
       await this.setObjectNotExistsAsync(phoneBase, {
-        type: 'folder',
-        common: { name: `Phone ${phoneId}` },
+        type: 'channel',
+        common: { name: phoneBase },
         native: {},
       });
 
