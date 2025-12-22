@@ -48,7 +48,7 @@ Windgeschwindigkeitseinheit	m/s, km/h oder bft
 
 Autor: Halmand
 
-Mitentwickelt von: Code GPT (PulsR AI)
+Mitentwickelt von: Code GPT (PulsR AI) and DeepSeek
 Lizenz: MIT License
 
 ---
