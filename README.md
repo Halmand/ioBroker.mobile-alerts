@@ -52,7 +52,9 @@ Mitentwickelt von: Code GPT (PulsR AI) and DeepSeek
 Lizenz: MIT License
 
 ---
-🧾 CHANGELOG 1.0.8
+🧾 CHANGELOG
+
+## **1.0.8 (2025-12-22)**
 
 🧭 Winddaten korrigiert
 Windrichtung wird jetzt korrekt als Grad + Text erkannt (225° Südwest)
