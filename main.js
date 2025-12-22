@@ -56,22 +56,28 @@ class MobileAlerts extends utils.Adapter {
       $('div.sensor, table.table').each((i, el) => {
         const $el = $(el);
         const text = $el.text().trim().replace(/\s+/g, ' ');
-        if (!text || text.length < 20) return;
+        if (!text || text.length < 10) return;
 
         // Verbesserte Sensornamen-Extraktion
         let sensorName = '';
-        const nameMatch = text.match(/^([^0-9\n]+?)\s*(ID|Zeitpunkt|Temperatur|Luftfeuchte|Regen|Wind)/i);
         
-        if (nameMatch && nameMatch[1].trim().length > 0) {
-          sensorName = nameMatch[1].trim();
-        } else {
-          // Fallback: Suche nach erstem Textblock vor ID
-          const beforeId = text.split('ID')[0].trim();
-          if (beforeId && beforeId.length > 0 && beforeId.length < 50) {
-            sensorName = beforeId;
-          } else {
-            sensorName = `Sensor_${i + 1}`;
+        // Methode 1: Suche nach h4-Überschrift
+        const $h4 = $el.find('h4').first();
+        if ($h4.length) {
+          sensorName = $h4.text().trim();
+        }
+        
+        // Methode 2: Suche nach Text vor ID
+        if (!sensorName) {
+          const nameMatch = text.match(/^([^0-9\n]+?)\s*(ID|Zeitpunkt|Temperatur|Luftfeuchte|Regen|Wind|Kontaktsensor)/i);
+          if (nameMatch) {
+            sensorName = nameMatch[1].trim();
           }
+        }
+        
+        // Methode 3: Fallback
+        if (!sensorName) {
+          sensorName = `Sensor_${i + 1}`;
         }
 
         const idMatch = text.match(/ID\s+([A-F0-9]{8,})/i);
@@ -82,11 +88,11 @@ class MobileAlerts extends utils.Adapter {
         let battery = 'ok';
         if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) battery = 'low';
 
-        // Bereinige den Sensornamen (nur Buchstaben, Zahlen, Leerzeichen und Unterstriche)
+        // Bereinige den Sensornamen
         const cleanName = sensorName
-          .replace(/[^\wäöüßÄÖÜ\s]/gi, '') // Entferne Sonderzeichen
+          .replace(/[^\wäöüßÄÖÜ\s]/gi, '')
           .trim()
-          .replace(/\s+/g, '_'); // Ersetze Leerzeichen durch Unterstriche
+          .replace(/\s+/g, '_');
         
         const data = { id, timestamp, battery };
 
@@ -103,11 +109,26 @@ class MobileAlerts extends utils.Adapter {
         if (humOut) data.humidity_out = parseFloat(humOut[1].replace(',', '.'));
         if (tempCable) data.temperature_cable = parseFloat(tempCable[1].replace(',', '.'));
 
+        // 🚪 Türkontakt / Kontaktsensor
+        if (text.includes('Kontaktsensor')) {
+          // Status extrahieren
+          if (text.includes('Geschlossen')) {
+            data.contact = 'closed';
+          } else if (text.includes('Offen') || text.includes('Open')) {
+            data.contact = 'open';
+          }
+          
+          // Zusätzlich: Batterie-Status für Kontaktsensor
+          if (text.toLowerCase().includes('batterie schwach')) {
+            data.battery = 'low';
+          }
+        }
+
         // 💧 Feuchtesensor (trocken/feucht)
         const wetMatch = text.match(/(trocken|feucht)/i);
         if (wetMatch) data.wet = wetMatch[1].toLowerCase() === 'feucht';
 
-        // 🌧️ Regen - alle Formate
+        // 🌧️ Regen
         // Einfaches Format: "Regen: 0,3 mm"
         const rainSimple = text.match(/Regen\s*[:=]?\s*([\d,.-]+)\s*mm/i);
         // Gesamtregen
@@ -116,7 +137,6 @@ class MobileAlerts extends utils.Adapter {
         const rainRate = text.match(/Rate\s+([\d,.-]+)\s*mm\/h/i);
         
         if (rainSimple && !rainTotal) {
-          // Einfaches Regenformat
           data.rain = parseFloat(rainSimple[1].replace(',', '.'));
         }
         if (rainTotal) data.rain_total = parseFloat(rainTotal[1].replace(',', '.'));
@@ -152,7 +172,7 @@ class MobileAlerts extends utils.Adapter {
         await this.setObjectNotExistsAsync(base, {
           type: 'channel',
           common: { name: sensor.name },
-          native: { phoneId },
+          native: { phoneId, sensorId: sensor.id },
         });
 
         for (const [key, val] of Object.entries(sensor)) {
@@ -161,7 +181,7 @@ class MobileAlerts extends utils.Adapter {
           await this.setObjectNotExistsAsync(`${base}.${key}`, {
             type: 'state',
             common: {
-              name: key,
+              name: this.getFriendlyName(key),
               type: typeof val === 'number' ? 'number' : typeof val === 'boolean' ? 'boolean' : 'string',
               role: this.mapRole(key),
               read: true,
@@ -197,6 +217,7 @@ class MobileAlerts extends utils.Adapter {
     if (k.includes('battery')) return 'indicator.battery';
     if (k.includes('timestamp')) return 'value.time';
     if (k === 'wet') return 'sensor.water';
+    if (k === 'contact') return 'sensor.door';
     return 'state';
   }
 
@@ -210,6 +231,28 @@ class MobileAlerts extends utils.Adapter {
       return 'm/s';
     }
     return '';
+  }
+
+  getFriendlyName(k) {
+    const names = {
+      temperature: 'Temperatur',
+      temperature_out: 'Temperatur Außen',
+      temperature_cable: 'Temperatur Kabel',
+      humidity: 'Luftfeuchte',
+      humidity_out: 'Luftfeuchte Außen',
+      rain: 'Regen',
+      rain_total: 'Regen Gesamt',
+      rain_rate: 'Regen Rate',
+      wind_speed: 'Windgeschwindigkeit',
+      wind_gust: 'Windböe',
+      wind_dir: 'Windrichtung',
+      battery: 'Batterie',
+      timestamp: 'Letzte Aktualisierung',
+      wet: 'Feuchtigkeit',
+      contact: 'Kontaktstatus',
+      id: 'Sensor ID',
+    };
+    return names[k] || k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   }
 }
 
