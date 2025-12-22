@@ -54,7 +54,8 @@ class MobileAlerts extends utils.Adapter {
       const sensors = [];
 
       $('div.sensor, table.table').each((i, el) => {
-        const text = $(el).text().trim().replace(/\s+/g, ' ');
+        const $el = $(el);
+        const text = $el.text().trim().replace(/\s+/g, ' ');
         if (!text) return;
 
         const nameMatch = text.match(/^(.*?) ID /);
@@ -112,11 +113,30 @@ class MobileAlerts extends utils.Adapter {
           if (wetMatch) data.wet = wetMatch[1].toLowerCase() === 'feucht';
         }
 
-        // 🌧️ Regen
-        const rainTotal = text.match(/Gesamt\s+([\d,.-]+)\s*mm/i);
-        const rainRate = text.match(/Rate\s+([\d,.-]+)\s*mm\/h/i);
-        if (rainTotal) data.rain_total = parseFloat(rainTotal[1].replace(',', '.'));
-        if (rainRate) data.rain_rate = parseFloat(rainRate[1].replace(',', '.'));
+        // 🌧️ VERBESSERTE REGEN-ERKENNUNG
+        // Versuche verschiedene Regensensor-Formate
+        if (text.includes('Regen')) {
+          // Format 1: "Regen 0,3 mm" (ohne Doppelpunkt)
+          const rainMatch1 = text.match(/Regen\s+([\d,.-]+)\s*mm/i);
+          // Format 2: "Regen: 0,3 mm" (mit Doppelpunkt)
+          const rainMatch2 = text.match(/Regen\s*[:=]?\s*([\d,.-]+)\s*mm/i);
+          // Format 3: "Gesamt 0,3 mm" (für Gesamtregen)
+          const rainTotal = text.match(/Gesamt\s+([\d,.-]+)\s*mm/i);
+          // Format 4: "Rate 0,3 mm/h" (für Regenrate)
+          const rainRate = text.match(/Rate\s+([\d,.-]+)\s*mm\/h/i);
+          
+          // Erkenne zuerst Gesamt und Rate
+          if (rainTotal) data.rain_total = parseFloat(rainTotal[1].replace(',', '.'));
+          if (rainRate) data.rain_rate = parseFloat(rainRate[1].replace(',', '.'));
+          
+          // Wenn kein rain_total aber einfacher Regenwert erkannt
+          if (!data.rain_total && (rainMatch1 || rainMatch2)) {
+            const rainValue = rainMatch1 ? rainMatch1[1] : rainMatch2[1];
+            data.rain = parseFloat(rainValue.replace(',', '.'));
+            // Falls rain noch nicht existiert, setze es als rain_total für Kompatibilität
+            if (!data.rain_total) data.rain_total = data.rain;
+          }
+        }
 
         // 🌬️ Wind
         const windSpeed = text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i);
@@ -181,7 +201,7 @@ class MobileAlerts extends utils.Adapter {
   mapRole(k) {
     if (k.includes('temperature')) return 'value.temperature';
     if (k.includes('humidity')) return 'value.humidity';
-    if (k.includes('rain')) return 'value.rain';
+    if (k.includes('rain') || k === 'rain_total' || k === 'rain_rate') return 'value.rain';
     if (k.includes('wind')) return 'value.wind';
     if (k.includes('battery')) return 'indicator.battery';
     if (k.includes('timestamp')) return 'value.time';
@@ -194,6 +214,7 @@ class MobileAlerts extends utils.Adapter {
     if (k.includes('temperature')) return '°C';
     if (k.includes('humidity')) return '%';
     if (k.includes('rain')) return 'mm';
+    if (k === 'rain_rate') return 'mm/h';
     if (k.includes('wind')) {
       if (this.windUnit === 'km/h') return 'km/h';
       if (this.windUnit === 'bft') return 'Bft';
