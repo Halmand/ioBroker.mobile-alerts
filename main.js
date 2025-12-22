@@ -154,9 +154,10 @@ class MobileAlerts extends utils.Adapter {
         return;
       }
 
-      // 💾 Objekte unter PhoneID > Sensorname
+      // 💾 Objekte unter Phone_PhoneID > Sensorname (GEÄNDERTE STRUKTUR)
       for (const sensor of sensors) {
-        const base = `${phoneId}.${sensor.name.replace(/\s+/g, '_')}`;
+        // Füge "Phone_" vor der PhoneID hinzu
+        const base = `Phone_${phoneId}.${sensor.name.replace(/\s+/g, '_')}`;
 
         await this.setObjectNotExistsAsync(base, {
           type: 'channel',
@@ -184,10 +185,10 @@ class MobileAlerts extends utils.Adapter {
         }
       }
 
-      this.log.info(`Erfolgreich ${sensors.length} Sensor(en) aktualisiert für ${phoneId}.`);
+      this.log.info(`Erfolgreich ${sensors.length} Sensor(en) aktualisiert für Phone_${phoneId}.`);
       await this.setStateAsync('info.connection', { val: true, ack: true });
     } catch (err) {
-      this.log.error(`Fehler beim Abruf für ${phoneId}: ${err.message}`);
+      this.log.error(`Fehler beim Abruf für Phone_${phoneId}: ${err.message}`);
       await this.setStateAsync('info.connection', { val: false, ack: true });
     }
   }
