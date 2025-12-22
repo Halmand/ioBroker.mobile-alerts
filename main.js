@@ -66,7 +66,6 @@ class MobileAlerts extends utils.Adapter {
         let battery = 'ok';
         if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) battery = 'low';
 
-        // BEIBEHALTUNG: Originale Sensornamen statt ID
         const name = nameMatch ? nameMatch[1].trim() : `Sensor_${i + 1}`;
         const data = { id, timestamp, battery };
 
@@ -83,9 +82,19 @@ class MobileAlerts extends utils.Adapter {
         if (humOut) data.humidity_out = parseFloat(humOut[1].replace(',', '.'));
         if (tempCable) data.temperature_cable = parseFloat(tempCable[1].replace(',', '.'));
 
-        // 🚪 Türkontakt / Kontaktsensor (NUR bei Kontaktsensoren)
+        // 🧾 Historische Durchschnittswerte Luftfeuchtigkeit
+        const hum3h = text.match(/Durchschn\.\s*Luftf\.\s*3H\s+([\d,.-]+)\s*%/i);
+        const hum24h = text.match(/Durchschn\.\s*Luftf\.\s*24H\s+([\d,.-]+)\s*%/i);
+        const hum7d = text.match(/Durchschn\.\s*Luftf\.\s*7D\s+([\d,.-]+)\s*%/i);
+        const hum30d = text.match(/Durchschn\.\s*Luftf\.\s*30D\s+([\d,.-]+)\s*%/i);
+
+        if (hum3h) data.humidity_avg_3h = parseFloat(hum3h[1].replace(',', '.'));
+        if (hum24h) data.humidity_avg_24h = parseFloat(hum24h[1].replace(',', '.'));
+        if (hum7d) data.humidity_avg_7d = parseFloat(hum7d[1].replace(',', '.'));
+        if (hum30d) data.humidity_avg_30d = parseFloat(hum30d[1].replace(',', '.'));
+
+        // 🚪 Türkontakt / Kontaktsensor
         if (text.includes('Kontaktsensor')) {
-          // Status extrahieren
           if (text.includes('Geschlossen')) {
             data.contact = 'closed';
           } else if (text.includes('Offen') || text.includes('Open')) {
@@ -94,7 +103,6 @@ class MobileAlerts extends utils.Adapter {
         }
 
         // 💧 Feuchtesensor (trocken/feucht) - NUR bei expliziter Erwähnung
-        // Prüfe zuerst ob es sich um einen Feuchtesensor handelt
         const isMoistureSensor = text.match(/Feuchtesensor|wet|trocken|feucht/i) && 
                                  !text.includes('Temperatur') && 
                                  !text.includes('Luftfeuchte');
@@ -126,7 +134,7 @@ class MobileAlerts extends utils.Adapter {
         return;
       }
 
-      // 💾 Objekte unter PhoneID > Sensorname (URSPRÜNGLICHE STRUKTUR)
+      // 💾 Objekte unter PhoneID > Sensorname
       for (const sensor of sensors) {
         const base = `${phoneId}.${sensor.name.replace(/\s+/g, '_')}`;
 
