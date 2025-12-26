@@ -54,6 +54,49 @@ Lizenz: MIT License
 ---
 🧾 CHANGELOG
 
+## **1.0.9 (2025-12-26)
+🚀 Neue Funktionen & Major Improvements
+Multi-Sensor-Unterstützung für Geräte mit mehreren Temperatur-/Feuchtesensoren
+
+Erkennt automatisch: Temp In, Hum In, Temp 1, Hum 1, Temp 2, Hum 2, etc.
+
+Speichert als: temperature, humidity, temperature_1, humidity_1, etc.
+
+Neue Objektstruktur: Phone_<ID>.<Sensorname> für bessere Organisation
+
+Verbesserte Regensensor-Erkennung mit Unterstützung für:
+
+Einfaches Format: Regen: 0,3 mm
+
+Gesamtregen: Regen Gesamt: 5,2 mm
+
+Regenrate: Regen Rate: 2,1 mm/h
+
+🔧 Bugfixes & Optimierungen
+HTML-Parsing komplett überarbeitet für beide Mobile-Alerts-Seitenstrukturen:
+
+Alte Struktur: div.sensor, table.table
+
+Neue Struktur: H4-Elemente mit nachfolgenden Datenzeilen
+
+Fehlerkorrektur: phoneldPattern is not defined Fehler behoben
+
+Robuste Sensornamen-Extraktion aus verschiedensten HTML-Formaten
+
+Bessere Batterie-Status-Erkennung für alle Sensortypen
+
+Stabilere Verbindungshandhabung mit verbesserten Timeouts
+
+📊 Kleinere Verbesserungen
+Verbesserte Log-Ausgaben mit aussagekräftigeren Meldungen
+
+Konsistente Datenformate für alle Sensortypen
+
+Fallback-Parsing für ältere Mobile-Alerts-Installationen
+
+Optimierte Performance durch effizientere HTML-Verarbeitung
+
+
 ## **1.0.8 (2025-12-22)**
 
 🧭 Winddaten korrigiert
