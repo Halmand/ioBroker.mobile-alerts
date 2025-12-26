@@ -5,7 +5,7 @@
     "info": {
       "type": "staticText",
       "label": "Info",
-      "text": "<b>Mobile Alerts Sensor Adapter</b><br>Version 1.0.8<br><br>Dieser Adapter liest Sensorwerte (Temperatur, Luftfeuchtigkeit, Regen, Wind, Bodensensoren) aus dem Online-Portal <a href='https://measurements.mobile-alerts.eu' target='_blank'>mobile-alerts.eu</a> aus."
+      "text": "<b>Mobile Alerts Sensor Adapter</b><br>Version 1.0.9<br><br>Dieser Adapter liest Sensorwerte (Temperatur, Luftfeuchtigkeit, Regen, Wind, Bodensensoren) aus dem Online-Portal <a href='https://measurements.mobile-alerts.eu' target='_blank'>mobile-alerts.eu</a> aus."
     },
     "divider1": {
       "type": "divider"
