@@ -131,46 +131,48 @@ class MobileAlerts extends utils.Adapter {
       const text = $el.text().trim();
 
       if (tagName === 'H4' && text && !text.includes('Phone ID') && !text.includes('Überblick') && !text.includes('MOBILE ALERTS')) {
-        // Neuen Sensor beginnen - vorherigen speichern
-        if (currentSensor) {
-          // Sensor nur hinzufügen, wenn er Daten hat
-          if (Object.keys(currentSensor).length > 1) { // Mehr als nur 'name'
-            sensors.push(currentSensor);
-          }
+        // Neuer Sensor beginnt
+        if (currentSensor && Object.keys(currentSensor.data).length > 0) {
+          sensors.push({
+            name: currentSensor.name,
+            ...currentSensor.data
+          });
         }
         
         currentSensor = {
-          name: text.trim()
+          name: text.trim(),
+          data: {}
         };
         sensorIndex++;
       } 
-      else if (currentSensor) {
+      else if (currentSensor && text) {
         // Sensordaten extrahieren
         if (text.startsWith('ID')) {
           const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
-          if (idMatch) currentSensor.id = idMatch[1];
+          if (idMatch) currentSensor.data.id = idMatch[1];
         } 
         else if (text.startsWith('Zeitpunkt')) {
           const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+\d{4})/i);
-          if (timeMatch) currentSensor.timestamp = timeMatch[1].trim();
+          if (timeMatch) currentSensor.data.timestamp = timeMatch[1].trim();
         }
-        else if (text.match(/(Temp|Hum|Temperatur|Luftfeuchte|Regen|Wind|Batterie)/i)) {
-          // Extrahiere alle Sensordaten direkt ins Sensor-Objekt
-          this.extractSensorData(text, currentSensor);
+        else if (text.match(/(Temp|Hum|Temperatur|Luftfeuchte|Regen|Wind)/i)) {
+          // Extrahiere alle Sensordaten
+          this.extractSensorData(text, currentSensor.data);
         }
         
-        // Batterie-Status extrahieren
-        if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) {
-          currentSensor.battery = 'low';
-        } else if (text.includes('Batterie') && !currentSensor.battery) {
-          currentSensor.battery = 'ok';
+        // Batterie-Status
+        if (/batterie\s*(schwach|low|leer|empty)/i.test(text) && !currentSensor.data.battery) {
+          currentSensor.data.battery = 'low';
         }
       }
     });
 
     // Letzten Sensor hinzufügen
-    if (currentSensor && Object.keys(currentSensor).length > 1) {
-      sensors.push(currentSensor);
+    if (currentSensor && Object.keys(currentSensor.data).length > 0) {
+      sensors.push({
+        name: currentSensor.name,
+        ...currentSensor.data
+      });
     }
   }
 
@@ -376,7 +378,7 @@ class MobileAlerts extends utils.Adapter {
     if (windDir) data.wind_dir = windDir[1];
   }
 
-  // FEHLENDE FUNKTION HINZUGEFÜGT
+  // 🔧 FEHLENDE FUNKTION HINZUGEFÜGT - DIESE WAR DER KRITISCHE BUG
   convertWind(v) {
     if (!v || isNaN(v)) return 0;
     if (this.windUnit === 'km/h') return +(v * 3.6).toFixed(1);
