@@ -152,8 +152,29 @@ class MobileAlerts extends utils.Adapter {
 
     const data = { id, timestamp, battery };
 
-    // 🌡️ KORRIGIERTE Temperatur & Feuchte Erkennung
-    // Zuerst nach spezifischen Formaten wie "Temp In 21,0 C", "Hum 1 87%" suchen
+    // 🌡️ VERBESSERTE Temperatur & Feuchte Erkennung für ALLE Varianten
+    // 1. Zuerst nach spezifischen Formaten suchen
+    const specificPatterns = [
+      // Temperatur Kabelsensor
+      { pattern: /Temperatur\s+Kabelsensor\s+([-\d,]+)\s*C/i, key: 'temperature_cable' },
+      // Temperatur Außen
+      { pattern: /Temperatur\s+Außen\s+([-\d,]+)\s*C/i, key: 'temperature_out' },
+      // Temperatur Außen (alternative Schreibweise)
+      { pattern: /Temperatur\s+Aussen\s+([-\d,]+)\s*C/i, key: 'temperature_out' },
+      // Luftfeuchte Außen
+      { pattern: /Luftfeuchte\s+Außen\s+([\d,]+)\s*%/i, key: 'humidity_out' },
+      // Luftfeuchte Außen (alternative Schreibweise)
+      { pattern: /Luftfeuchte\s+Aussen\s+([\d,]+)\s*%/i, key: 'humidity_out' }
+    ];
+
+    for (const { pattern, key } of specificPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        data[key] = parseFloat(match[1].replace(',', '.'));
+      }
+    }
+    
+    // 2. Dann nach Multi-Sensor Formaten wie "Temp In 21,0 C", "Hum 1 87%"
     const multiPattern = /(Temp|Hum)\s+(\w+)\s+([-\d,]+)\s*(C|%)/gi;
     let match;
     
@@ -167,7 +188,7 @@ class MobileAlerts extends utils.Adapter {
       if (type === 'temp') {
         // Temperatur-Werte
         if (sensorNum === 'in' || sensorNum === 'innen') {
-          data.temperature = value;
+          if (!data.temperature) data.temperature = value; // Nur setzen wenn noch nicht vorhanden
         } else if (!isNaN(sensorNum)) {
           // Nummerierte Sensoren (1, 2, 3, etc.)
           data[`temperature_${sensorNum}`] = value;
@@ -177,7 +198,7 @@ class MobileAlerts extends utils.Adapter {
       } else if (type === 'hum') {
         // Luftfeuchtigkeits-Werte
         if (sensorNum === 'in' || sensorNum === 'innen') {
-          data.humidity = value;
+          if (!data.humidity) data.humidity = value; // Nur setzen wenn noch nicht vorhanden
         } else if (!isNaN(sensorNum)) {
           // Nummerierte Sensoren (1, 2, 3, etc.)
           data[`humidity_${sensorNum}`] = value;
@@ -187,16 +208,15 @@ class MobileAlerts extends utils.Adapter {
       }
     }
     
-    // Dann nach einfachen "Temperatur 16,3 C" suchen (separat behandeln)
+    // 3. Dann nach einfachen "Temperatur 16,3 C" suchen (nur falls noch nicht gesetzt)
     const simpleTempMatch = text.match(/Temperatur\s+([-\d,]+)\s*C/i);
-    if (simpleTempMatch && !data.temperature) {
-      // Nur setzen, wenn nicht schon durch "Temp In" gesetzt wurde
+    if (simpleTempMatch && !data.temperature && !data.temperature_cable && !data.temperature_out) {
       data.temperature = parseFloat(simpleTempMatch[1].replace(',', '.'));
     }
     
-    // Nach einfachen "Luftfeuchte X %" suchen
+    // 4. Nach einfachen "Luftfeuchte X %" suchen (nur falls noch nicht gesetzt)
     const simpleHumMatch = text.match(/Luftfeuchte\s+([\d,]+)\s*%/i);
-    if (simpleHumMatch && !data.humidity) {
+    if (simpleHumMatch && !data.humidity && !data.humidity_out) {
       data.humidity = parseFloat(simpleHumMatch[1].replace(',', '.'));
     }
 
