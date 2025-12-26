@@ -59,7 +59,7 @@ class MobileAlerts extends utils.Adapter {
         const text = $el.text().trim().replace(/\s+/g, ' ');
         if (!text) return;
 
-        this.parseSensor(text, sensors, i);
+        this.parseSensor(text, sensors, i, phoneId);
       });
 
       // METHODE 2: Neue Struktur (falls Methode 1 nichts findet)
@@ -83,7 +83,7 @@ class MobileAlerts extends utils.Adapter {
             nextEl = nextEl.next();
           }
           
-          this.parseSensor(sensorText, sensors, i);
+          this.parseSensor(sensorText, sensors, i, phoneId);
         });
       }
 
@@ -130,7 +130,7 @@ class MobileAlerts extends utils.Adapter {
     }
   }
 
-  parseSensor(text, sensors, index) {
+  parseSensor(text, sensors, index, phoneId) {
     const nameMatch = text.match(/^(.*?)\s+(ID|Zeitpunkt|Temp|Hum|Temperatur)/i);
     const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
     const timeMatch = text.match(/Zeitpunkt\s+([\d:. ]+\d{4})/i);
@@ -142,7 +142,9 @@ class MobileAlerts extends utils.Adapter {
     if (nameMatch) {
       sensorName = nameMatch[1].trim();
       // Entferne mögliche PhoneID aus dem Namen
-      sensorName = sensorName.replace(phoneIdPattern, '').trim();
+      if (phoneId && sensorName.includes(phoneId)) {
+        sensorName = sensorName.replace(phoneId, '').trim();
+      }
     }
 
     let battery = 'ok';
