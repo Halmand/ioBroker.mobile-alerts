@@ -152,52 +152,52 @@ class MobileAlerts extends utils.Adapter {
 
     const data = { id, timestamp, battery };
 
-    // 🌡️ VERBESSERTE Temperatur & Feuchte Erkennung
-    // Suche nach allen Temperatur/Luftfeuchtigkeits-Mustern
-    const tempHumPattern = /(Temp|Hum|Temperatur|Luftfeuchte)\s*(\w*)\s+([-\d,]+)\s*(C|%|°C)/gi;
+    // 🌡️ KORRIGIERTE Temperatur & Feuchte Erkennung
+    // Zuerst nach spezifischen Formaten wie "Temp In 21,0 C", "Hum 1 87%" suchen
+    const multiPattern = /(Temp|Hum)\s+(\w+)\s+([-\d,]+)\s*(C|%)/gi;
     let match;
     
-    while ((match = tempHumPattern.exec(text)) !== null) {
-      const type = match[1].toLowerCase();
-      const sensorNum = match[2].toLowerCase();
+    while ((match = multiPattern.exec(text)) !== null) {
+      const type = match[1].toLowerCase(); // "temp" oder "hum"
+      const sensorNum = match[2].toLowerCase(); // "in", "1", "2", "3"
       const valueStr = match[3];
-      const unit = match[4];
       
       const value = parseFloat(valueStr.replace(',', '.'));
       
-      if (type.includes('temp')) {
+      if (type === 'temp') {
         // Temperatur-Werte
         if (sensorNum === 'in' || sensorNum === 'innen') {
           data.temperature = value;
-        } else if (sensorNum === 'out' || sensorNum === 'außen' || sensorNum === 'aussen') {
-          data.temperature_out = value;
-        } else if (sensorNum === 'cable' || sensorNum === 'kabel') {
-          data.temperature_cable = value;
-        } else if (sensorNum && !isNaN(sensorNum)) {
+        } else if (!isNaN(sensorNum)) {
           // Nummerierte Sensoren (1, 2, 3, etc.)
           data[`temperature_${sensorNum}`] = value;
-        } else if (type === 'temperatur' && !sensorNum) {
-          // Einfache "Temperatur X C"
-          data.temperature = value;
-        } else if (sensorNum) {
+        } else {
           data[`temperature_${sensorNum}`] = value;
         }
-      } else if (type.includes('hum') || type.includes('luftfeuchte')) {
+      } else if (type === 'hum') {
         // Luftfeuchtigkeits-Werte
         if (sensorNum === 'in' || sensorNum === 'innen') {
           data.humidity = value;
-        } else if (sensorNum === 'out' || sensorNum === 'außen' || sensorNum === 'aussen') {
-          data.humidity_out = value;
-        } else if (sensorNum && !isNaN(sensorNum)) {
+        } else if (!isNaN(sensorNum)) {
           // Nummerierte Sensoren (1, 2, 3, etc.)
           data[`humidity_${sensorNum}`] = value;
-        } else if (type === 'luftfeuchte' && !sensorNum) {
-          // Einfache "Luftfeuchte X %"
-          data.humidity = value;
-        } else if (sensorNum) {
+        } else {
           data[`humidity_${sensorNum}`] = value;
         }
       }
+    }
+    
+    // Dann nach einfachen "Temperatur 16,3 C" suchen (separat behandeln)
+    const simpleTempMatch = text.match(/Temperatur\s+([-\d,]+)\s*C/i);
+    if (simpleTempMatch && !data.temperature) {
+      // Nur setzen, wenn nicht schon durch "Temp In" gesetzt wurde
+      data.temperature = parseFloat(simpleTempMatch[1].replace(',', '.'));
+    }
+    
+    // Nach einfachen "Luftfeuchte X %" suchen
+    const simpleHumMatch = text.match(/Luftfeuchte\s+([\d,]+)\s*%/i);
+    if (simpleHumMatch && !data.humidity) {
+      data.humidity = parseFloat(simpleHumMatch[1].replace(',', '.'));
     }
 
     // 🧾 Historische Durchschnittswerte
