@@ -53,29 +53,37 @@ class MobileAlerts extends utils.Adapter {
 
       const sensors = [];
 
-      // 🔍 UNIVERSAL PARSER: Erkenne und parse ALLE Strukturen
-      // Methode 1: Neue Struktur mit H4 Überschriften (wie 035886772208, 296842788104)
-      const hasH4Sensors = $('h4:contains("ID")').length > 0 || $('h4').filter((i, el) => {
-        const text = $(el).text().trim();
-        return text && !text.includes('Phone ID') && !text.includes('Überblick') && !text.includes('MOBILE ALERTS');
-      }).length > 0;
-
-      if (hasH4Sensors) {
-        // Parse neue H4-basierte Struktur
-        this.parseH4Structure($, sensors, phoneId);
-      } else {
-        // Methode 2: Alte Struktur mit div.sensor/table.table (wie 196559408437, 549301590686)
-        this.parseOldStructure($, sensors, phoneId);
+      // 🔍 PRÜFUNG FÜR DIE NEUE, KOMPAKTE STRUKTUR (wie bei 035886772208)
+      // Diese Struktur hat keine H4-Sensoren, sondern nur eine Liste mit Werten
+      if ($('strong:contains("Durchschn. Luftf. 3H")').length > 0) {
+        // NEUE METHODE: Kompakte Struktur für PhoneIDs wie 035886772208
+        this.parseCompactStructure($, sensors, phoneId);
       }
+      // ALTE STRUKTUREN
+      else {
+        // Methode 1: Neue Struktur mit H4 Überschriften (für andere PhoneIDs)
+        const hasH4Sensors = $('h4:contains("ID")').length > 0 || $('h4').filter((i, el) => {
+          const text = $(el).text().trim();
+          return text && !text.includes('Phone ID') && !text.includes('Überblick') && !text.includes('MOBILE ALERTS');
+        }).length > 0;
 
-      // Methode 3: Fallback für alle Fälle
-      if (!sensors.length) {
-        $('div.sensor, table.table, div.panel, div.well').each((i, el) => {
-          const text = $(el).text().trim().replace(/\s+/g, ' ');
-          if (text && text.length > 20) {
-            this.parseSensorText(text, sensors, i, phoneId);
-          }
-        });
+        if (hasH4Sensors) {
+          // Parse neue H4-basierte Struktur
+          this.parseH4Structure($, sensors, phoneId);
+        } else {
+          // Methode 2: Alte Struktur mit div.sensor/table.table
+          this.parseOldStructure($, sensors, phoneId);
+        }
+
+        // Methode 3: Fallback für alle Fälle
+        if (!sensors.length) {
+          $('div.sensor, table.table, div.panel, div.well').each((i, el) => {
+            const text = $(el).text().trim().replace(/\s+/g, ' ');
+            if (text && text.length > 20) {
+              this.parseSensorText(text, sensors, i, phoneId);
+            }
+          });
+        }
       }
 
       if (!sensors.length) {
@@ -121,6 +129,73 @@ class MobileAlerts extends utils.Adapter {
     }
   }
 
+  // NEUE METHODE: Für die kompakte Struktur (035886772208)
+  parseCompactStructure($, sensors, phoneId) {
+    const sensorData = {};
+    // Sensorname - kann hier angepasst werden oder aus der Konfiguration kommen
+    const sensorName = "Küche";
+
+    // 1. Extrahiere den Zeitpunkt
+    const timeLabel = $('strong:contains("Zeitpunkt")');
+    if (timeLabel.length) {
+      const timeValue = timeLabel.nextAll('h4, h5').first().text().trim();
+      if (timeValue) sensorData.timestamp = timeValue;
+    }
+
+    // 2. Extrahiere die Temperatur
+    const tempLabel = $('strong:contains("Temperatur")');
+    if (tempLabel.length) {
+      const tempText = tempLabel.nextAll('h4, h5').first().text();
+      const tempMatch = tempText.match(/([\d,]+)\s*C/);
+      if (tempMatch) {
+        const value = parseFloat(tempMatch[1].replace(',', '.'));
+        if (!isNaN(value)) {
+          // Speichere als temperature (nicht temperature_in oder temperature_out)
+          sensorData.temperature = value;
+        }
+      }
+    }
+
+    // 3. Extrahiere die Luftfeuchte (nicht die Durchschnittswerte)
+    const humLabel = $('strong:contains("Luftfeuchte")').filter((i, el) => {
+      return !$(el).text().includes('Durchschn.');
+    }).first();
+    
+    if (humLabel.length) {
+      const humText = humLabel.nextAll('h4, h5').first().text();
+      const humMatch = humText.match(/([\d,]+)\s*%/);
+      if (humMatch) {
+        const value = parseFloat(humMatch[1].replace(',', '.'));
+        if (!isNaN(value)) {
+          sensorData.humidity = value;
+        }
+      }
+    }
+
+    // 4. Extrahiere die historischen Durchschnittswerte
+    const avgLabels = ['3H', '24H', '7D', '30D'];
+    avgLabels.forEach(period => {
+      const labelText = `Durchschn. Luftf. ${period}`;
+      const avgLabel = $(`strong:contains("${labelText}")`);
+      if (avgLabel.length) {
+        const avgText = avgLabel.nextAll('h4, h5').first().text();
+        const avgMatch = avgText.match(/([\d,.-]+)\s*%/);
+        if (avgMatch) {
+          const value = parseFloat(avgMatch[1].replace(',', '.'));
+          if (!isNaN(value)) {
+            sensorData[`humidity_avg_${period.toLowerCase()}`] = value;
+          }
+        }
+      }
+    });
+
+    // Füge den Sensor nur hinzu, wenn wir Daten haben
+    if (Object.keys(sensorData).length > 0) {
+      sensors.push({ name: sensorName, ...sensorData });
+      this.log.info(`Kompakte Struktur für Phone_${phoneId} erkannt und geparst.`);
+    }
+  }
+
   parseH4Structure($, sensors, phoneId) {
     let currentSensor = null;
     let sensorIndex = 0;
@@ -131,7 +206,6 @@ class MobileAlerts extends utils.Adapter {
       const text = $el.text().trim();
 
       if (tagName === 'H4' && text && !text.includes('Phone ID') && !text.includes('Überblick') && !text.includes('MOBILE ALERTS')) {
-        // Neuer Sensor beginnt
         if (currentSensor && Object.keys(currentSensor.data).length > 0) {
           sensors.push({
             name: currentSensor.name,
@@ -146,7 +220,6 @@ class MobileAlerts extends utils.Adapter {
         sensorIndex++;
       } 
       else if (currentSensor && text) {
-        // Sensordaten extrahieren
         if (text.startsWith('ID')) {
           const idMatch = text.match(/ID\s+([A-F0-9]+)/i);
           if (idMatch) currentSensor.data.id = idMatch[1];
@@ -156,18 +229,15 @@ class MobileAlerts extends utils.Adapter {
           if (timeMatch) currentSensor.data.timestamp = timeMatch[1].trim();
         }
         else if (text.match(/(Temp|Hum|Temperatur|Luftfeuchte|Regen|Wind)/i)) {
-          // Extrahiere alle Sensordaten
           this.extractSensorData(text, currentSensor.data);
         }
         
-        // Batterie-Status
         if (/batterie\s*(schwach|low|leer|empty)/i.test(text) && !currentSensor.data.battery) {
           currentSensor.data.battery = 'low';
         }
       }
     });
 
-    // Letzten Sensor hinzufügen
     if (currentSensor && Object.keys(currentSensor.data).length > 0) {
       sensors.push({
         name: currentSensor.name,
@@ -177,8 +247,6 @@ class MobileAlerts extends utils.Adapter {
   }
 
   parseOldStructure($, sensors, phoneId) {
-    // Struktur für PhoneIDs wie 196559408437 und 549301590686
-    // <div class="sensor"> oder <table class="table">
     $('div.sensor, table.table, div.panel').each((i, el) => {
       const $el = $(el);
       const text = $el.text().trim().replace(/\s+/g, ' ');
@@ -209,11 +277,8 @@ class MobileAlerts extends utils.Adapter {
     if (/batterie\s*(schwach|low|leer|empty)/i.test(text)) battery = 'low';
 
     const data = { id, timestamp, battery };
-
-    // Extrahiere alle Sensordaten aus dem Text
     this.extractSensorData(text, data);
 
-    // Nur Sensoren mit gültigen Daten hinzufügen
     const hasData = Object.keys(data).some(key => 
       !['id', 'timestamp', 'battery'].includes(key) && data[key] !== null && data[key] !== undefined
     );
@@ -224,9 +289,6 @@ class MobileAlerts extends utils.Adapter {
   }
 
   extractSensorData(text, data) {
-    // 🔧 UNIVERSALE Sensordatenerkennung für ALLE Formate
-    
-    // 1. Temp/Hum mit Nummerierung (Temp In, Hum 1, etc.)
     const multiPattern = /(Temp|Hum)\s+(\w+)\s+([-\d,]+)\s*(C|%)/gi;
     let match;
     
@@ -260,7 +322,6 @@ class MobileAlerts extends utils.Adapter {
       }
     }
     
-    // 2. Einfache Temperatur/Luftfeuchte (für Kompatibilität)
     const simpleTempMatch = text.match(/Temperatur\s+([-\d,]+)\s*C/i);
     if (simpleTempMatch && !data.temperature && !data.temperature_in) {
       const value = parseFloat(simpleTempMatch[1].replace(',', '.'));
@@ -273,7 +334,6 @@ class MobileAlerts extends utils.Adapter {
       if (!isNaN(value)) data.humidity = value;
     }
     
-    // 3. Spezielle Sensoren
     const tempCableMatch = text.match(/Temperatur\s+Kabelsensor\s+([-\d,]+)\s*C/i);
     if (tempCableMatch) {
       const value = parseFloat(tempCableMatch[1].replace(',', '.'));
@@ -294,7 +354,6 @@ class MobileAlerts extends utils.Adapter {
       if (!isNaN(value)) data.humidity_out = value;
     }
     
-    // 4. Historische Durchschnittswerte
     const hum3h = text.match(/Durchschn\.?\s*Luftf\.?\s*3H\s+([\d,.-]+)\s*%/i);
     const hum24h = text.match(/Durchschn\.?\s*Luftf\.?\s*24H\s+([\d,.-]+)\s*%/i);
     const hum7d = text.match(/Durchschn\.?\s*Luftf\.?\s*7D\s+([\d,.-]+)\s*%/i);
@@ -317,7 +376,6 @@ class MobileAlerts extends utils.Adapter {
       if (!isNaN(value)) data.humidity_avg_30d = value;
     }
     
-    // 5. Türkontakt
     if (text.includes('Kontaktsensor')) {
       if (text.includes('Geschlossen')) {
         data.contact = 'closed';
@@ -326,7 +384,6 @@ class MobileAlerts extends utils.Adapter {
       }
     }
     
-    // 6. Feuchtesensor
     const isMoistureSensor = text.match(/Feuchtesensor|wet|trocken|feucht/i) && 
                              !text.includes('Temperatur') && 
                              !text.includes('Luftfeuchte');
@@ -336,7 +393,6 @@ class MobileAlerts extends utils.Adapter {
       if (wetMatch) data.wet = wetMatch[1].toLowerCase() === 'feucht';
     }
     
-    // 7. Regen
     if (text.includes('Regen')) {
       const rainMatch1 = text.match(/Regen\s+([\d,.-]+)\s*mm/i);
       const rainMatch2 = text.match(/Regen\s*[:=]?\s*([\d,.-]+)\s*mm/i);
@@ -362,7 +418,6 @@ class MobileAlerts extends utils.Adapter {
       }
     }
     
-    // 8. Wind
     const windSpeed = text.match(/Windgeschwindigkeit\s+([\d,.-]+)\s*m\/s/i);
     const windGust = text.match(/Böe\s+([\d,.-]+)\s*m\/s/i);
     const windDir = text.match(/Windrichtung\s+([A-Za-zäöüß]+|\d{1,3}°)/i);
@@ -378,7 +433,6 @@ class MobileAlerts extends utils.Adapter {
     if (windDir) data.wind_dir = windDir[1];
   }
 
-  // 🔧 FEHLENDE FUNKTION HINZUGEFÜGT - DIESE WAR DER KRITISCHE BUG
   convertWind(v) {
     if (!v || isNaN(v)) return 0;
     if (this.windUnit === 'km/h') return +(v * 3.6).toFixed(1);
