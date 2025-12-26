@@ -1,7 +1,7 @@
 {
   "common": {
     "name": "mobile-alerts",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "title": "Mobile Alerts",
     "titleLang": {
       "en": "Mobile Alerts Sensor Reader",
