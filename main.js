@@ -155,13 +155,14 @@ class MobileAlerts extends utils.Adapter {
         }
       }
       
-      // 🔧 Fallback für nicht-nummerierte Sensoren
-      const tempIn = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
-      const humIn = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
-      const tempOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
-      const humOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
+      // 🔧 MINIMALER FIX: Erkenne "Temp In" und "Temp Out" für Basis-Station
+      const tempIn = text.match(/(?:Temp|Temperatur)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*C/i);
+      const humIn = text.match(/(?:Hum|Luftfeuchte)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*%/i);
+      const tempOut = text.match(/(?:Temp|Temperatur)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*C/i);
+      const humOut = text.match(/(?:Hum|Luftfeuchte)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*%/i);
       const tempCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
 
+      // Nur setzen, wenn noch nicht durch nummerierte Sensoren gesetzt
       if (tempIn && !data.temperature_1) data.temperature = parseFloat(tempIn[1].replace(',', '.'));
       if (humIn && !data.humidity_1) data.humidity = parseFloat(humIn[1].replace(',', '.'));
       if (tempOut) data.temperature_out = parseFloat(tempOut[1].replace(',', '.'));
@@ -342,11 +343,11 @@ class MobileAlerts extends utils.Adapter {
 
   // Vereinfachte extractSensorData für H4-Struktur
   extractSensorDataSimple(text, data) {
-    // 🌡️ Temperatur & Feuchte
-    const tempIn = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
-    const humIn = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
-    const tempOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
-    const humOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
+    // 🌡️ Temperatur & Feuchte - MINIMALER FIX
+    const tempIn = text.match(/(?:Temp|Temperatur)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*C/i);
+    const humIn = text.match(/(?:Hum|Luftfeuchte)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*%/i);
+    const tempOut = text.match(/(?:Temp|Temperatur)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*C/i);
+    const humOut = text.match(/(?:Hum|Luftfeuchte)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*%/i);
     const tempCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
 
     if (tempIn) data.temperature = parseFloat(tempIn[1].replace(',', '.'));
