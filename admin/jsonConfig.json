@@ -28,8 +28,7 @@
           "default": "",
           "placeholder": "Geben Sie hier Ihre PhoneID ein...",
           "sm": 8,
-          "required": true,
-          "style": "border: 1px solid #d1d5db; border-radius: 6px; padding: 8px;"
+          "required": true
         },
         
         "pollInterval": {
@@ -40,8 +39,7 @@
           "min": 30,
           "max": 3600,
           "step": 30,
-          "sm": 4,
-          "style": "border: 1px solid #d1d5db; border-radius: 6px; padding: 8px;"
+          "sm": 4
         },
         
         "connectionNote": {
@@ -66,8 +64,7 @@
             { "label": "🌊 Beaufort (Bft)", "value": "bft" }
           ],
           "default": "m/s",
-          "sm": 6,
-          "style": "border: 1px solid #d1d5db; border-radius: 6px; padding: 8px;"
+          "sm": 6
         },
         
         "unitNote": {
