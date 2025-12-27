@@ -121,7 +121,6 @@ class MobileAlerts extends utils.Adapter {
 
   // 🔧 NEUE METHODE: Für Basis-Station mit nummerierten Sensoren
   parseBasisStructure($, sensors, phoneId) {
-    // Dies ist die Original-Logik aus deinem ersten Code, die funktioniert hat
     $('div.sensor, table.table').each((i, el) => {
       const $el = $(el);
       const text = $el.text().trim().replace(/\s+/g, ' ');
@@ -202,6 +201,15 @@ class MobileAlerts extends utils.Adapter {
       if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
       if (windGust) data.wind_gust = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
       if (windDir) data.wind_dir = windDir[1];
+
+      // 🚪 TÜR/FENSTERKONTAKT - FIX AUS ALTEM CODE
+      if (text.includes('Kontaktsensor')) {
+        if (text.includes('Geschlossen')) {
+          data.contact = 'closed';
+        } else if (text.includes('Offen') || text.includes('Open')) {
+          data.contact = 'open';
+        }
+      }
 
       sensors.push({ name, ...data });
     });
@@ -312,6 +320,15 @@ class MobileAlerts extends utils.Adapter {
         if (/batterie\s*(schwach|low|leer|empty)/i.test(text) && !currentSensor.data.battery) {
           currentSensor.data.battery = 'low';
         }
+
+        // 🚪 TÜR/FENSTERKONTAKT - FIX AUS ALTEM CODE
+        if (text.includes('Kontaktsensor')) {
+          if (text.includes('Geschlossen')) {
+            currentSensor.data.contact = 'closed';
+          } else if (text.includes('Offen') || text.includes('Open')) {
+            currentSensor.data.contact = 'open';
+          }
+        }
       }
     });
 
@@ -343,6 +360,15 @@ class MobileAlerts extends utils.Adapter {
     const windGust = text.match(/Böe\s+([\d,.-]+)\s*m\/s/i);
     if (windSpeed) data.wind_speed = this.convertWind(parseFloat(windSpeed[1].replace(',', '.')));
     if (windGust) data.wind_gust = this.convertWind(parseFloat(windGust[1].replace(',', '.')));
+    
+    // 🚪 TÜR/FENSTERKONTAKT - FIX AUS ALTEM CODE
+    if (text.includes('Kontaktsensor')) {
+      if (text.includes('Geschlossen')) {
+        data.contact = 'closed';
+      } else if (text.includes('Offen') || text.includes('Open')) {
+        data.contact = 'open';
+      }
+    }
   }
 
   parseOldStructure($, sensors, phoneId) {
@@ -377,6 +403,15 @@ class MobileAlerts extends utils.Adapter {
 
     const data = { id, timestamp, battery };
     this.extractSensorDataSimple(text, data);
+
+    // 🚪 TÜR/FENSTERKONTAKT - FIX AUS ALTEM CODE
+    if (text.includes('Kontaktsensor')) {
+      if (text.includes('Geschlossen')) {
+        data.contact = 'closed';
+      } else if (text.includes('Offen') || text.includes('Open')) {
+        data.contact = 'open';
+      }
+    }
 
     const hasData = Object.keys(data).some(key => 
       !['id', 'timestamp', 'battery'].includes(key) && data[key] !== null && data[key] !== undefined
