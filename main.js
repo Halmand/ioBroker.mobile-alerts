@@ -155,16 +155,30 @@ class MobileAlerts extends utils.Adapter {
         }
       }
       
-      // 🔧 MINIMALER FIX: Erkenne "Temp In" und "Temp Out" für Basis-Station
-      const tempIn = text.match(/(?:Temp|Temperatur)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*C/i);
-      const humIn = text.match(/(?:Hum|Luftfeuchte)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*%/i);
-      const tempOut = text.match(/(?:Temp|Temperatur)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*C/i);
-      const humOut = text.match(/(?:Hum|Luftfeuchte)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*%/i);
+      // 🔧 MINIMALER FIX: Erkenne "Temp IN" und "Hum IN" mit Leerzeichen
+      const tempIn = text.match(/Temp\s*IN\s+([\d,.-]+)\s*C/i);
+      const humIn = text.match(/Hum\s*IN\s+([\d,.-]+)\s*%/i);
+      
+      // 🔧 Auch die alten Formate weiterhin unterstützen
+      const tempInAlt = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
+      const humInAlt = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
+      const tempOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
+      const humOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
       const tempCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
 
-      // Nur setzen, wenn noch nicht durch nummerierte Sensoren gesetzt
-      if (tempIn && !data.temperature_1) data.temperature = parseFloat(tempIn[1].replace(',', '.'));
-      if (humIn && !data.humidity_1) data.humidity = parseFloat(humIn[1].replace(',', '.'));
+      // Setze TempIN/HumIN wenn vorhanden
+      if (tempIn) {
+        data.temperature = parseFloat(tempIn[1].replace(',', '.'));
+      } else if (tempInAlt && !data.temperature_1) {
+        data.temperature = parseFloat(tempInAlt[1].replace(',', '.'));
+      }
+      
+      if (humIn) {
+        data.humidity = parseFloat(humIn[1].replace(',', '.'));
+      } else if (humInAlt && !data.humidity_1) {
+        data.humidity = parseFloat(humInAlt[1].replace(',', '.'));
+      }
+      
       if (tempOut) data.temperature_out = parseFloat(tempOut[1].replace(',', '.'));
       if (humOut) data.humidity_out = parseFloat(humOut[1].replace(',', '.'));
       if (tempCable) data.temperature_cable = parseFloat(tempCable[1].replace(',', '.'));
@@ -343,15 +357,23 @@ class MobileAlerts extends utils.Adapter {
 
   // Vereinfachte extractSensorData für H4-Struktur
   extractSensorDataSimple(text, data) {
-    // 🌡️ Temperatur & Feuchte - MINIMALER FIX
-    const tempIn = text.match(/(?:Temp|Temperatur)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*C/i);
-    const humIn = text.match(/(?:Hum|Luftfeuchte)(?:\s+In(?:nen)?)?\s+([\d,.-]+)\s*%/i);
-    const tempOut = text.match(/(?:Temp|Temperatur)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*C/i);
-    const humOut = text.match(/(?:Hum|Luftfeuchte)(?:\s+Out|\s+Außen)?\s+([\d,.-]+)\s*%/i);
+    // 🌡️ Temperatur & Feuchte - MINIMALER FIX für "Temp IN" und "Hum IN"
+    const tempIn = text.match(/Temp\s*IN\s+([\d,.-]+)\s*C/i);
+    const humIn = text.match(/Hum\s*IN\s+([\d,.-]+)\s*%/i);
+    
+    // 🔧 Auch die alten Formate weiterhin unterstützen
+    const tempInAlt = text.match(/Temperatur(?: Innen)?\s+([\d,.-]+)\s*C/i);
+    const humInAlt = text.match(/Luftfeuchte(?: Innen)?\s+([\d,.-]+)\s*%/i);
+    const tempOut = text.match(/Temperatur Außen\s+([\d,.-]+)\s*C/i);
+    const humOut = text.match(/Luftfeuchte Außen\s+([\d,.-]+)\s*%/i);
     const tempCable = text.match(/Temperatur Kabelsensor\s+([\d,.-]+)\s*C/i);
 
     if (tempIn) data.temperature = parseFloat(tempIn[1].replace(',', '.'));
+    else if (tempInAlt) data.temperature = parseFloat(tempInAlt[1].replace(',', '.'));
+    
     if (humIn) data.humidity = parseFloat(humIn[1].replace(',', '.'));
+    else if (humInAlt) data.humidity = parseFloat(humInAlt[1].replace(',', '.'));
+    
     if (tempOut) data.temperature_out = parseFloat(tempOut[1].replace(',', '.'));
     if (humOut) data.humidity_out = parseFloat(humOut[1].replace(',', '.'));
     if (tempCable) data.temperature_cable = parseFloat(tempCable[1].replace(',', '.'));
