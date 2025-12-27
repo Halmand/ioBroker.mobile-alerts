@@ -1,76 +1,54 @@
 {
   "type": "panel",
-  "label": "Mobile Alerts Konfiguration",
-  "icon": "/mobile-alerts/admin/mobile-alerts.png",
+  "label": "Mobile Alerts Einstellungen",
   "items": {
-    "headerInfo": {
+    "info": {
       "type": "staticText",
-      "label": "Adapter-Informationen",
-      "text": "<div style='font-size:16px; font-weight:bold; margin-bottom:10px;'>📱 Mobile Alerts Sensor Adapter</div><div style='font-size:14px; line-height:1.5; margin-bottom:20px;'><b>Version 1.0.9</b><br><br>Dieser Adapter liest Sensorwerte (Temperatur, Luftfeuchtigkeit, Regen, Wind, Bodensensoren) aus dem Online-Portal <a href='https://measurements.mobile-alerts.eu' target='_blank' style='color:#3b82f6; font-weight:bold;'>measurements.mobile-alerts.eu</a> aus.</div>"
+      "label": "Info",
+      "text": "<b>Mobile Alerts Sensor Adapter</b><br>Version 1.0.9<br><br>Dieser Adapter liest Sensorwerte (Temperatur, Luftfeuchtigkeit, Regen, Wind, Bodensensoren) aus dem Online-Portal <a href='https://measurements.mobile-alerts.eu' target='_blank'>mobile-alerts.eu</a> aus."
     },
-    
     "divider1": {
       "type": "divider"
     },
-    
     "phoneId": {
       "type": "text",
       "label": "Phone ID(s)",
-      "tooltip": "Eine oder mehrere PhoneIDs von Ihrem Mobile Alerts Konto, getrennt durch Kommas (z.B. 'PHONE12345, PHONE67890')",
+      "tooltip": "Eine oder mehrere PhoneIDs vom Mobile Alerts Konto, getrennt durch Kommas.",
       "default": "",
-      "placeholder": "Geben Sie hier Ihre PhoneID ein...",
-      "sm": 8,
-      "required": true,
-      "style": "font-size:14px;"
+      "placeholder": "",
+      "sm": 6
     },
-    
     "pollInterval": {
       "type": "number",
       "label": "Abfrageintervall (Sekunden)",
-      "tooltip": "Intervall für das automatische Auslesen der Sensordaten (min. 30, max. 3600 Sekunden)",
+      "tooltip": "Intervall für das automatische Auslesen der Sensordaten.",
       "default": 300,
-      "min": 30,
+      "min": 100,
       "max": 3600,
-      "step": 30,
-      "sm": 4,
-      "style": "font-size:14px;"
+      "sm": 3
     },
-    
-    "connectionNote": {
-      "type": "staticText",
-      "text": "<div style='background-color:#fef3c7; padding:12px; border:1px solid #f59e0b; font-size:14px; margin-top:15px; margin-bottom:20px;'><b style='color:#92400e;'>💡 Hinweis:</b> Stellen Sie sicher, dass Ihre Sensoren über die Mobile Alerts App mit der angegebenen PhoneID verbunden sind und online sind.</div>"
-    },
-    
     "divider2": {
       "type": "divider"
     },
-    
     "windUnit": {
       "type": "select",
       "label": "Windgeschwindigkeitseinheit",
-      "tooltip": "Wählen Sie die bevorzugte Einheit für Windgeschwindigkeitsmessungen",
+      "tooltip": "Einheit für Windgeschwindigkeiten",
       "options": [
         { "label": "Meter pro Sekunde (m/s)", "value": "m/s" },
         { "label": "Kilometer pro Stunde (km/h)", "value": "km/h" },
         { "label": "Beaufort (Bft)", "value": "bft" }
       ],
       "default": "m/s",
-      "sm": 6,
-      "style": "font-size:14px;"
+      "sm": 3
     },
-    
-    "unitNote": {
-      "type": "staticText",
-      "text": "<div style='font-size:13px; color:#6b7280; margin-top:10px; padding:8px; background-color:#f9fafb; margin-bottom:20px;'>Die Einheit wird für alle Wind-Sensoren übernommen. Änderungen werden nach der nächsten Datenabfrage wirksam.</div>"
-    },
-    
     "divider3": {
       "type": "divider"
     },
-    
-    "footerNote": {
+    "note": {
       "type": "staticText",
-      "text": "<div style='background-color:#dbeafe; padding:15px; border-left:4px solid #3b82f6; font-size:14px;'><b style='font-size:15px; color:#1e40af;'>✅ Konfiguration speichern</b><br><br>Nach dem Speichern der Einstellungen startet der Adapter automatisch und beginnt mit dem Auslesen der Sensordaten. Überprüfen Sie die Logs im ioBroker-Admin bei Verbindungsproblemen.</div>"
+      "label": "Hinweis",
+      "text": "Der Adapter liest die Sensordaten direkt von der Mobile Alerts Website aus. Stellen Sie sicher, dass Ihre Sensoren über die Mobile Alerts App mit der angegebenen PhoneID verbunden sind."
     }
   }
 }
